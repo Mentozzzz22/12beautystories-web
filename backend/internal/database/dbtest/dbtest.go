@@ -37,7 +37,7 @@ func New(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 
 	name := "test_" + randomSuffix(t)
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
@@ -63,7 +63,7 @@ func New(t *testing.T) *pgxpool.Pool {
 			t.Errorf("connect admin for cleanup: %v", err)
 			return
 		}
-		defer conn.Close(cctx)
+		defer func() { _ = conn.Close(cctx) }()
 		if _, err := conn.Exec(cctx, "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)"); err != nil {
 			t.Errorf("drop database: %v", err)
 		}

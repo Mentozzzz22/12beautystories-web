@@ -43,6 +43,7 @@ type Promo struct {
 // PromoStatus explains what happened to the entered promo code.
 type PromoStatus string
 
+// Promo outcomes reported to the client.
 const (
 	PromoNone              PromoStatus = ""
 	PromoApplied           PromoStatus = "applied"
@@ -54,6 +55,7 @@ const (
 // Source tells where a discount came from.
 type Source string
 
+// Discount sources.
 const (
 	SourceRule  Source = "rule"
 	SourcePromo Source = "promo"

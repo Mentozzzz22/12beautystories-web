@@ -50,7 +50,7 @@ func (t *Telegram) NewOrder(ctx context.Context, o order.Order) error {
 		// The URL contains the bot token; never surface it in logs.
 		return fmt.Errorf("send message: %w", redact(err, t.token))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))

@@ -51,6 +51,7 @@ type Variant struct {
 // DeliveryMethod is how the customer receives the order.
 type DeliveryMethod string
 
+// Supported delivery methods.
 const (
 	DeliveryPickup  DeliveryMethod = "pickup"
 	DeliveryCourier DeliveryMethod = "courier"

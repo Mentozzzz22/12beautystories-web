@@ -71,6 +71,7 @@ type ProductSummary struct {
 // OptionKind says what distinguishes variants of a product.
 type OptionKind string
 
+// Supported option kinds.
 const (
 	OptionNone   OptionKind = "none"
 	OptionVolume OptionKind = "volume"
@@ -118,6 +119,7 @@ type Filter struct {
 	PageSize int
 }
 
+// Paging limits for product lists.
 const (
 	DefaultPageSize = 24
 	MaxPageSize     = 100
