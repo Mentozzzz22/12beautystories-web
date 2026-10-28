@@ -1,0 +1,86 @@
+// Command server runs the shop HTTP API.
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/catalog"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/config"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/database"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/httpapi"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/notify"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/order"
+)
+
+func main() {
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := run(log); err != nil {
+		log.Error("server stopped", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(log *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	pool, err := database.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := database.Migrate(ctx, pool); err != nil {
+		return err
+	}
+
+	var notifier order.Notifier
+	if cfg.TelegramEnabled() {
+		notifier = notify.NewTelegram(cfg.TelegramBotToken, cfg.TelegramChatID, &http.Client{Timeout: 10 * time.Second})
+	} else {
+		log.Warn("telegram notifications disabled: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is empty")
+	}
+
+	orders := order.NewService(order.NewPostgres(pool), notifier, func(err error) {
+		log.Error("order notification failed", "err", err)
+	})
+
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           httpapi.New(catalog.NewPostgres(pool), orders, log),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Info("listening", "addr", cfg.Addr)
+		errCh <- srv.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
+}

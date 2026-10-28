@@ -1,0 +1,28 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Env
+.env
+*.local
+
+# Go
+backend/bin/
+*.exe
+coverage.out
+
+# Node
+node_modules/
+web/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+uploads/
+
+# Local tooling
+.claude/
+*.log
