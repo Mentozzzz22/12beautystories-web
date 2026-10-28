@@ -30,9 +30,9 @@ Backend
 - [x] Cart quote + order placement (stock check, server-side price recalculation)
 - [x] Telegram notification on new order
 - [x] Repository integration tests against real Postgres
-- [ ] Admin auth (single owner account, session cookie)
-- [ ] Admin API: CRUD for catalog, banners, promos, rules; order list and status
-- [ ] Image upload with resizing (WebP)
+- [x] Admin auth (single owner account, session cookie)
+- [x] Admin API: CRUD for catalog, banners, promos, rules; order list and status
+- [x] Image upload with resizing (JPEG, max 1600 px; Go has no WebP encoder in the standard library)
 
 Storefront
 - [x] Home: 3–4 banner carousel, new arrivals
@@ -42,9 +42,9 @@ Storefront
 - [x] Cart (localStorage), promo code, checkout form, success page with Kaspi instructions
 
 Admin
-- [ ] Products with variants and photos, drag-and-drop ordering
-- [ ] Banners, promo codes, discount rules with on/off switch
-- [ ] Orders: list, status, customer contacts
+- [x] Products with variants and photos, photo ordering
+- [x] Banners, promo codes, discount rules with on/off switch
+- [x] Orders: list, status, customer contacts
 
 Release
 - [ ] Open Graph tags for products, sitemap.xml

@@ -11,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/admin"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/auth"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/catalog"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/config"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/database"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/httpapi"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/media"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/notify"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/order"
 )
@@ -57,12 +60,29 @@ func run(log *slog.Logger) error {
 		log.Error("order notification failed", "err", err)
 	})
 
+	uploads, err := media.NewStore(cfg.UploadDir, "/uploads/")
+	if err != nil {
+		return err
+	}
+
+	handler := httpapi.New(httpapi.Deps{
+		Catalog:      catalog.NewPostgres(pool),
+		Orders:       orders,
+		Admin:        admin.NewPostgres(pool),
+		Auth:         auth.NewService(pool),
+		Uploads:      uploads,
+		UploadDir:    cfg.UploadDir,
+		CookieSecure: cfg.CookieSecure,
+		TrustProxy:   cfg.TrustProxy,
+		Log:          log,
+	})
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.New(catalog.NewPostgres(pool), orders, log),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		ReadTimeout:       60 * time.Second, // photo uploads over mobile networks
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

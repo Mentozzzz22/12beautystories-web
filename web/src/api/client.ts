@@ -18,6 +18,10 @@ export type ApiErrorCode =
   | 'variant_unavailable'
   | 'insufficient_stock'
   | 'invalid_promo'
+  | 'conflict'
+  | 'unauthenticated'
+  | 'invalid_credentials'
+  | 'too_many_attempts'
   | 'internal'
   | 'network'
 
@@ -46,12 +50,14 @@ interface ErrorBody {
   fields?: Record<string, string>
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
+    // FormData sets its own multipart boundary header.
+    const json = !(init?.body instanceof FormData)
     res = await fetch(path, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: json ? { 'Content-Type': 'application/json', ...init?.headers } : init?.headers,
     })
   } catch {
     throw new ApiError(0, 'network', 'Нет соединения с сервером')
@@ -66,6 +72,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       body.fields,
     )
   }
+  if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
 

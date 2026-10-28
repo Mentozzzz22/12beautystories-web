@@ -3,7 +3,7 @@
 Self-hosted online store for **12 Beauty Stories**, a professional hair and skin care boutique in Astana, Kazakhstan.
 It replaces a paid site builder with a small Go + PostgreSQL backend and a React storefront.
 
-> Status: storefront MVP works end to end; admin panel is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> Status: storefront and admin panel MVP work end to end; deployment is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Features
 
@@ -14,6 +14,13 @@ It replaces a paid site builder with a small Go + PostgreSQL backend and a React
   with explicit stacking rules
 - Checkout with server-side price recalculation and atomic stock reservation
 - **Telegram notification** to the owner for every new order
+- **Admin panel** (`/admin`, mobile friendly): orders with status flow and WhatsApp link, products with
+  variants and photo gallery, brands and lines, categories, banners with scheduling, promo codes,
+  discount rules with an on/off switch
+- Cancelling an order returns items to stock; reopening reserves them again
+- Admin sessions: bcrypt passwords, SHA-256 hashed session tokens, `HttpOnly` + `SameSite=Strict` cookie,
+  login rate limiting
+- Image uploads are decoded, downscaled and re-encoded, which strips EXIF data and rejects SVG/HTML
 
 ## Tech stack
 
@@ -29,11 +36,16 @@ It replaces a paid site builder with a small Go + PostgreSQL backend and a React
 ```
 backend/
   cmd/server/          entry point
+  cmd/admin/           CLI to create admin accounts
   internal/
+    admin/             back office repository and validation
+    apperr/            shared validation / not found / conflict errors
+    auth/              admin accounts and sessions
     catalog/           storefront read model (menu, banners, products)
     config/            environment configuration
     database/          pgx pool and embedded SQL migrations
-    httpapi/           JSON API handlers and middleware
+    httpapi/           JSON API handlers and middleware (storefront + admin)
+    media/             image upload processing
     notify/            Telegram notifications
     order/             cart quote and checkout service
     pricing/           pure discount calculation
@@ -43,6 +55,7 @@ web/
   src/components/      layout, burger menu, banners, product cards
   src/lib/             cart store (localStorage), formatting
   src/pages/           home, catalog, product, cart, checkout
+  src/admin/           admin panel (lazy-loaded chunk)
 docs/ROADMAP.md
 ```
 
@@ -63,6 +76,15 @@ The server applies migrations on start. Load demo data:
 docker compose exec -T db psql -U shop -d shop < backend/db/seed.sql
 ```
 
+Create an admin account (the password is read from the environment, not from flags):
+
+```bash
+cd backend
+ADMIN_PASSWORD='choose-a-strong-one' go run ./cmd/admin create -email owner@example.com
+```
+
+Then sign in at http://localhost:5173/admin.
+
 Run the storefront (proxies `/api` to the Go server on :8080):
 
 ```bash
@@ -82,6 +104,9 @@ npm run dev
 | GET | `/api/products/{slug}` | Product details with media and variants |
 | POST | `/api/cart/quote` | Price a cart: `{"items":[{"variantId":1,"quantity":2}],"promoCode":"WELCOME5"}` |
 | POST | `/api/orders` | Place an order: quote body plus `customer` (`name`, `phone`, `delivery`, `address`, `comment`) |
+
+Admin endpoints live under `/api/admin/*` (login, CRUD for brands, lines, categories, products, banners,
+promos and rules, orders with status updates, image uploads) and require the session cookie.
 
 Errors use one shape: `{"code":"insufficient_stock","message":"...","fields":{...}}`.
 

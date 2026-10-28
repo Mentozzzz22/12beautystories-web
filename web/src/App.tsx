@@ -17,6 +17,10 @@ const queryClient = new QueryClient({
 
 const router = createBrowserRouter([
   {
+    path: '/admin/*',
+    lazy: async () => ({ Component: (await import('./admin/AdminApp')).AdminRoot }),
+  },
+  {
     element: <Layout />,
     children: [
       { path: '/', element: <HomePage /> },

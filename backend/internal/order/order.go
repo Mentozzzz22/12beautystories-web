@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/apperr"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/pricing"
 )
 
@@ -19,15 +20,6 @@ var (
 	ErrInsufficientStock  = errors.New("not enough stock")
 	ErrInvalidPromo       = errors.New("promo code is invalid or expired")
 )
-
-// ValidationError describes invalid checkout fields.
-type ValidationError struct {
-	Fields map[string]string
-}
-
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("invalid fields: %d", len(e.Fields))
-}
 
 // MaxQuantity limits a single cart line.
 const MaxQuantity = 99
@@ -269,41 +261,37 @@ const (
 )
 
 func validateCustomer(c Customer) (Customer, error) {
-	fields := make(map[string]string)
+	fields := apperr.Fields{}
 
 	c.Name = strings.TrimSpace(c.Name)
 	c.Address = strings.TrimSpace(c.Address)
 	c.Comment = strings.TrimSpace(c.Comment)
 
 	if c.Name == "" {
-		fields["name"] = "required"
+		fields.Add("name", apperr.Required)
 	} else if len([]rune(c.Name)) > maxNameLen {
-		fields["name"] = "too_long"
+		fields.Add("name", apperr.TooLong)
 	}
 	if phone, ok := NormalizePhone(c.Phone); ok {
 		c.Phone = phone
 	} else {
-		fields["phone"] = "invalid"
+		fields.Add("phone", apperr.Invalid)
 	}
 	switch c.Delivery {
 	case DeliveryPickup:
 		c.Address = ""
 	case DeliveryCourier, DeliveryPost:
 		if c.Address == "" {
-			fields["address"] = "required"
+			fields.Add("address", apperr.Required)
 		}
 	default:
-		fields["delivery"] = "invalid"
+		fields.Add("delivery", apperr.Invalid)
 	}
 	if len([]rune(c.Address)) > maxAddressLen {
-		fields["address"] = "too_long"
+		fields.Add("address", apperr.TooLong)
 	}
 	if len([]rune(c.Comment)) > maxCommentLen {
-		fields["comment"] = "too_long"
+		fields.Add("comment", apperr.TooLong)
 	}
-
-	if len(fields) > 0 {
-		return c, &ValidationError{Fields: fields}
-	}
-	return c, nil
+	return c, fields.Err()
 }

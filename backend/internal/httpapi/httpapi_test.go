@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/apperr"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/catalog"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/order"
 )
@@ -55,7 +56,7 @@ func (f *fakeOrders) Place(_ context.Context, _ []order.Item, _ string, c order.
 }
 
 func newTestAPI(cat *fakeCatalog, ord *fakeOrders) http.Handler {
-	return New(cat, ord, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(Deps{Catalog: cat, Orders: ord, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
 
 func do(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -119,7 +120,7 @@ func TestOrderErrorMapping(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{&order.ValidationError{Fields: map[string]string{"phone": "invalid"}}, http.StatusUnprocessableEntity, "validation"},
+		{&apperr.ValidationError{Fields: map[string]string{"phone": "invalid"}}, http.StatusUnprocessableEntity, "validation"},
 		{order.ErrEmptyCart, http.StatusUnprocessableEntity, "empty_cart"},
 		{order.ErrVariantUnavailable, http.StatusConflict, "variant_unavailable"},
 		{order.ErrInsufficientStock, http.StatusConflict, "insufficient_stock"},

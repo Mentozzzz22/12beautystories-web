@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/apperr"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/pricing"
 )
 
@@ -172,7 +173,7 @@ func TestPlaceValidation(t *testing.T) {
 	_, err := svc.Place(context.Background(), []Item{{VariantID: 10, Quantity: 1}}, "",
 		Customer{Name: "", Phone: "123", Delivery: DeliveryCourier})
 
-	var verr *ValidationError
+	var verr *apperr.ValidationError
 	if !errors.As(err, &verr) {
 		t.Fatalf("Place() error = %v, want ValidationError", err)
 	}
