@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="dev" type="CompoundRunConfigurationType">
+    <toRun name="db" type="docker-deploy" />
+    <toRun name="server" type="GoApplicationRunConfiguration" />
+    <toRun name="web" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

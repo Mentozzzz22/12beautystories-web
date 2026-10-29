@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="server" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="beauty-stories-shop" />
+    <working_directory value="$PROJECT_DIR$/backend" />
+    <envs>
+      <env name="DATABASE_URL" value="postgres://shop:shop@localhost:5433/shop?sslmode=disable" />
+      <env name="UPLOAD_DIR" value="../uploads" />
+    </envs>
+    <kind value="PACKAGE" />
+    <package value="github.com/Mentozzzz22/12beautystories-web/backend/cmd/server" />
+    <directory value="$PROJECT_DIR$" />
+    <auto_managed_config_id value="$PROJECT_DIR$/backend/cmd/server" />
+    <method v="2" />
+  </configuration>
+</component>
