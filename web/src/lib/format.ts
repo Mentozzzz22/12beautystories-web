@@ -19,8 +19,12 @@ export function plural(n: number, forms: readonly [string, string, string]): str
 /** Live formatting for Kazakhstan phone input: "+7 (701) 123-45-67". */
 export function formatPhoneInput(raw: string): string {
   let d = raw.replace(/\D/g, '')
-  // A pasted 10-digit local number ("7011234567") has no country code yet.
-  if (d.length === 10 || !/^[78]/.test(d)) d = '7' + d
+  // A lone "+" waits for the country code instead of completing it, so typing "+7" gives "+7".
+  if (d === '') return raw.includes('+') ? '+' : ''
+  // A pasted 10-digit local number ("7011234567") has no country code yet. Text that already went
+  // through this function starts with "+", so typing the 10th digit must not prepend another 7.
+  const pastedLocal = d.length === 10 && !raw.trimStart().startsWith('+')
+  if (pastedLocal || !/^[78]/.test(d)) d = '7' + d
   else if (d.startsWith('8')) d = '7' + d.slice(1)
   d = d.slice(0, 11)
 

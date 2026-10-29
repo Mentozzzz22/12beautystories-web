@@ -42,6 +42,12 @@ describe('formatPhoneInput', () => {
     expect(formatPhoneInput(raw)).toBe(expected)
   })
 
+  it.each(['87011234567', '+77011234567', '77011234567'])('keeps %s intact when typed', (keys) => {
+    let value = ''
+    for (const key of keys) value = formatPhoneInput(value + key)
+    expect(value).toBe('+7 (701) 123-45-67')
+  })
+
   it('detects a complete number', () => {
     expect(isCompletePhone('+7 (701) 123-45-67')).toBe(true)
     expect(isCompletePhone('+7 (701) 123-45')).toBe(false)
