@@ -71,7 +71,10 @@ func newStore() *fakeStore {
 }
 
 func validCustomer() Customer {
-	return Customer{Name: " Aigerim ", Phone: "8 (701) 123-45-67", Delivery: DeliveryCourier, Address: "Astana, Mangilik El 10"}
+	return Customer{
+		Name: " Aigerim ", Phone: "8 (701) 123-45-67", Delivery: DeliveryCourier, Address: "Astana, Mangilik El 10",
+		PrivacyAccepted: true,
+	}
 }
 
 func TestQuoteMergesDuplicatesAndAppliesRules(t *testing.T) {
@@ -177,7 +180,7 @@ func TestPlaceValidation(t *testing.T) {
 	if !errors.As(err, &verr) {
 		t.Fatalf("Place() error = %v, want ValidationError", err)
 	}
-	for _, field := range []string{"name", "phone", "address"} {
+	for _, field := range []string{"name", "phone", "address", "privacyAccepted"} {
 		if _, ok := verr.Fields[field]; !ok {
 			t.Errorf("missing validation error for %q in %v", field, verr.Fields)
 		}

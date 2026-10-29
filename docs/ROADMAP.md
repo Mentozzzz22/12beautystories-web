@@ -45,6 +45,8 @@ Admin
 - [x] Products with variants and photos, photo ordering
 - [x] Banners, promo codes, discount rules with on/off switch
 - [x] Orders: list, status, customer contacts
+- [x] Customers: history and stats per phone, notes, promotions consent, CSV export
+- [x] Privacy policy page and checkout consents
 
 Release
 - [x] Open Graph tags for products, sitemap.xml, robots.txt

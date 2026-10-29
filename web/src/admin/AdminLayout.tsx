@@ -6,6 +6,7 @@ import { adminApi, isUnauthenticated, useMe } from './api'
 
 const NAV = [
   { to: '/admin/orders', label: 'Заказы' },
+  { to: '/admin/customers', label: 'Клиенты' },
   { to: '/admin/products', label: 'Товары' },
   { to: '/admin/brands', label: 'Бренды и линии' },
   { to: '/admin/categories', label: 'Категории' },

@@ -114,12 +114,17 @@ func (p *Postgres) Create(ctx context.Context, o Order) (Order, error) {
 	}
 
 	c := o.Customer
+	customerID, err := upsertCustomer(ctx, tx, c)
+	if err != nil {
+		return Order{}, err
+	}
+
 	err = tx.QueryRow(ctx, `
-		INSERT INTO orders (customer_name, phone, delivery_method, address, comment, promo_code,
-		                    subtotal, discount_total, total)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO orders (customer_id, customer_name, phone, delivery_method, address, comment, promo_code,
+		                    subtotal, discount_total, total, privacy_accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
 		RETURNING id, created_at`,
-		c.Name, c.Phone, c.Delivery, c.Address, c.Comment, o.PromoCode,
+		customerID, c.Name, c.Phone, c.Delivery, c.Address, c.Comment, o.PromoCode,
 		o.Quote.Subtotal, o.Quote.DiscountTotal, o.Quote.Total).Scan(&o.ID, &o.CreatedAt)
 	if err != nil {
 		return Order{}, fmt.Errorf("insert order: %w", err)
@@ -140,4 +145,26 @@ func (p *Postgres) Create(ctx context.Context, o Order) (Order, error) {
 		return Order{}, fmt.Errorf("commit: %w", err)
 	}
 	return o, nil
+}
+
+// upsertCustomer finds the customer by phone or creates one. The latest name wins; marketing consent
+// can only be granted here, withdrawing it is done by the owner in the admin panel.
+func upsertCustomer(ctx context.Context, tx pgx.Tx, c Customer) (int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO customers (phone, name, marketing_consent, marketing_consent_at)
+		VALUES ($1, $2, $3::boolean, CASE WHEN $3::boolean THEN now() END)
+		ON CONFLICT (phone) DO UPDATE SET
+			name = EXCLUDED.name,
+			marketing_consent = customers.marketing_consent OR EXCLUDED.marketing_consent,
+			marketing_consent_at = CASE
+				WHEN EXCLUDED.marketing_consent AND NOT customers.marketing_consent THEN now()
+				ELSE customers.marketing_consent_at
+			END
+		RETURNING id`,
+		c.Phone, c.Name, c.MarketingConsent).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("upsert customer: %w", err)
+	}
+	return id, nil
 }

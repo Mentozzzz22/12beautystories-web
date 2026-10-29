@@ -30,6 +30,25 @@ func brandID(t *testing.T, pool *pgxpool.Pool, slug string) int64 {
 	return id
 }
 
+// insertOrder stores a bare order and its customer the way checkout does.
+func insertOrder(t *testing.T, pool *pgxpool.Pool, name, phone string, total int64) int64 {
+	t.Helper()
+	var id int64
+	err := pool.QueryRow(context.Background(), `
+		WITH c AS (
+			INSERT INTO customers (phone, name) VALUES ($2, $1)
+			ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name
+			RETURNING id
+		)
+		INSERT INTO orders (customer_id, customer_name, phone, delivery_method, subtotal, total)
+		SELECT c.id, $1, $2, 'pickup', $3, $3 FROM c
+		RETURNING id`, name, phone, total).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert order: %v", err)
+	}
+	return id
+}
+
 func fieldErr(t *testing.T, err error, field string) string {
 	t.Helper()
 	var verr *apperr.ValidationError
@@ -216,11 +235,7 @@ func TestOrderStatusMovesStock(t *testing.T) {
 		WHERE p.slug = 'davines-minu-shampoo'`).Scan(&variantID); err != nil {
 		t.Fatal(err)
 	}
-	var orderID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO orders (customer_name, phone, delivery_method, subtotal, total)
-		VALUES ('Test', '+77011234567', 'pickup', 39000, 39000) RETURNING id`).Scan(&orderID); err != nil {
-		t.Fatal(err)
-	}
+	orderID := insertOrder(t, pool, "Test", "+77011234567", 39000)
 	dbtest.Exec(t, pool, `INSERT INTO order_items (order_id, variant_id, product_name, unit_price, quantity, line_total)
 		VALUES ($1, $2, 'MINU Shampoo', 19500, 2, 39000)`, orderID, variantID)
 	stock := func() (s int) {
@@ -264,9 +279,8 @@ func TestOrderStatusMovesStock(t *testing.T) {
 func TestOrdersSearch(t *testing.T) {
 	pool, repo := setup(t)
 	ctx := context.Background()
-	dbtest.Exec(t, pool, `INSERT INTO orders (customer_name, phone, delivery_method, subtotal, total) VALUES
-		('Айгерим', '+77011234567', 'pickup', 1000, 1000),
-		('Динара', '+77779998877', 'courier', 2000, 2000)`)
+	insertOrder(t, pool, "Айгерим", "+77011234567", 1000)
+	insertOrder(t, pool, "Динара", "+77779998877", 2000)
 	dbtest.Exec(t, pool, `UPDATE orders SET status = 'paid' WHERE customer_name = 'Динара'`)
 
 	tests := []struct {
@@ -290,5 +304,97 @@ func TestOrdersSearch(t *testing.T) {
 	}
 	if n, _ := repo.NewOrdersCount(ctx); n != 1 {
 		t.Errorf("NewOrdersCount = %d, want 1", n)
+	}
+}
+
+func TestCustomers(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+
+	first := insertOrder(t, pool, "Айгерим", "+77011234567", 10_000)
+	insertOrder(t, pool, "Айгерим", "+77011234567", 5_000)
+	cancelled := insertOrder(t, pool, "Айгерим", "+77011234567", 99_000)
+	insertOrder(t, pool, "Динара", "+77779998877", 30_000)
+	dbtest.Exec(t, pool, `UPDATE orders SET status = 'cancelled' WHERE id = $1`, cancelled)
+	dbtest.Exec(t, pool, `UPDATE orders SET created_at = now() - interval '30 days' WHERE id = $1`, first)
+	dbtest.Exec(t, pool, `UPDATE customers SET marketing_consent = true WHERE name = 'Динара'`)
+
+	page, err := repo.Customers(ctx, admin.CustomerFilter{Sort: admin.SortSpent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 2 || page.Items[0].Name != "Динара" {
+		t.Fatalf("Customers(spent) = %+v, want Динара first of 2", page.Items)
+	}
+	aigerim := page.Items[1]
+	if aigerim.OrderCount != 2 || aigerim.TotalSpent != 15_000 || aigerim.LastOrderAt == nil {
+		t.Errorf("stats = %+v, want 2 orders for 15000 without the cancelled one", aigerim)
+	}
+
+	tests := []struct {
+		filter admin.CustomerFilter
+		want   int
+	}{
+		{admin.CustomerFilter{Query: "дина"}, 1},
+		{admin.CustomerFilter{Query: "8 701 123"}, 1},
+		{admin.CustomerFilter{Marketing: true}, 1},
+		{admin.CustomerFilter{Sort: "drop table"}, 2},
+	}
+	for _, tt := range tests {
+		got, err := repo.Customers(ctx, tt.filter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Total != tt.want {
+			t.Errorf("Customers(%+v) total = %d, want %d", tt.filter, got.Total, tt.want)
+		}
+	}
+
+	all, err := repo.ExportCustomers(ctx, admin.CustomerFilter{})
+	if err != nil || len(all) != 2 {
+		t.Errorf("ExportCustomers() = %d rows, %v; want 2", len(all), err)
+	}
+
+	card, err := repo.Customer(ctx, aigerim.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(card.Orders) != 3 || card.MarketingConsentAt != nil {
+		t.Errorf("card = %d orders, consent at %v; want all 3 orders and no consent", len(card.Orders), card.MarketingConsentAt)
+	}
+	if o, err := repo.Order(ctx, first); err != nil || o.CustomerID != aigerim.ID {
+		t.Errorf("Order().CustomerID = %d, %v; want %d", o.CustomerID, err, aigerim.ID)
+	}
+}
+
+func TestUpdateCustomer(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+	insertOrder(t, pool, "Айгерим", "+77011234567", 1000)
+	var id int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM customers`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := repo.UpdateCustomer(ctx, id, admin.CustomerUpdate{Name: " Айгерим С. ", Note: "сухие волосы", MarketingConsent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name != "Айгерим С." || c.Note != "сухие волосы" || !c.MarketingConsent || c.MarketingConsentAt == nil {
+		t.Errorf("UpdateCustomer() = %+v", c)
+	}
+	grantedAt := *c.MarketingConsentAt
+
+	// Saving without changing the consent keeps its timestamp.
+	c, err = repo.UpdateCustomer(ctx, id, admin.CustomerUpdate{Name: "Айгерим", MarketingConsent: true})
+	if err != nil || !c.MarketingConsentAt.Equal(grantedAt) {
+		t.Errorf("consent time changed: %v -> %v, %v", grantedAt, c.MarketingConsentAt, err)
+	}
+
+	if _, err := repo.UpdateCustomer(ctx, id, admin.CustomerUpdate{Name: " "}); fieldErr(t, err, "name") == "" {
+		t.Error("empty name accepted")
+	}
+	if _, err := repo.UpdateCustomer(ctx, 999_999, admin.CustomerUpdate{Name: "X"}); !errors.Is(err, apperr.ErrNotFound) {
+		t.Errorf("unknown customer error = %v, want ErrNotFound", err)
 	}
 }

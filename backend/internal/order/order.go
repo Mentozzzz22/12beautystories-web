@@ -57,6 +57,10 @@ type Customer struct {
 	Delivery DeliveryMethod `json:"delivery"`
 	Address  string         `json:"address"`
 	Comment  string         `json:"comment"`
+	// PrivacyAccepted is the mandatory consent to personal data processing.
+	PrivacyAccepted bool `json:"privacyAccepted"`
+	// MarketingConsent opts in to promotions. Leaving it unchecked never withdraws an earlier consent.
+	MarketingConsent bool `json:"marketingConsent"`
 }
 
 // Line is a priced order line.
@@ -292,6 +296,9 @@ func validateCustomer(c Customer) (Customer, error) {
 	}
 	if len([]rune(c.Comment)) > maxCommentLen {
 		fields.Add("comment", apperr.TooLong)
+	}
+	if !c.PrivacyAccepted {
+		fields.Add("privacyAccepted", apperr.Required)
 	}
 	return c, fields.Err()
 }

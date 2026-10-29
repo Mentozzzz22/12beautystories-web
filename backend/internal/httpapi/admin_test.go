@@ -36,7 +36,8 @@ func (fakeAuth) Logout(context.Context, string) error { return nil }
 // fakeAdmin embeds the interface so tests implement only the methods they call.
 type fakeAdmin struct {
 	AdminStore
-	saved admin.Brand
+	saved          admin.Brand
+	customerFilter admin.CustomerFilter
 }
 
 func (f *fakeAdmin) Brands(context.Context) ([]admin.Brand, error) {
@@ -183,5 +184,36 @@ func TestRateLimiterWindow(t *testing.T) {
 	now = now.Add(2 * time.Minute)
 	if !l.allow("ip") {
 		t.Error("limiter must reset after the window")
+	}
+}
+
+func (f *fakeAdmin) ExportCustomers(_ context.Context, cf admin.CustomerFilter) ([]admin.CustomerListItem, error) {
+	f.customerFilter = cf
+	last := time.Date(2026, 10, 30, 22, 0, 0, 0, time.UTC) // already Oct 31 in Astana
+	return []admin.CustomerListItem{
+		{Name: "Айгерим", Phone: "+77011234567", OrderCount: 2, TotalSpent: 15000, LastOrderAt: &last, MarketingConsent: true},
+		{Name: "=HYPERLINK(\"x\")", Phone: "+77779998877"},
+	}, nil
+}
+
+func TestExportCustomersCSV(t *testing.T) {
+	store := &fakeAdmin{}
+	rec := serve(newAdminAPI(store), adminRequest(http.MethodGet, "/api/admin/customers/export.csv?marketing=1&q=a", "", true))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
+	}
+	if !store.customerFilter.Marketing || store.customerFilter.Query != "a" {
+		t.Errorf("filter = %+v, want marketing and query passed through", store.customerFilter)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+
+	want := utf8BOM +
+		"Имя;Телефон;Заказов;Сумма, ₸;Последний заказ;Согласие на рассылку\r\n" +
+		"Айгерим;8 701 123 45 67;2;15000;31.10.2026;да\r\n" +
+		"\"'=HYPERLINK(\"\"x\"\")\";8 777 999 88 77;0;0;;нет\r\n"
+	if got := rec.Body.String(); got != want {
+		t.Errorf("csv =\n%q\nwant\n%q", got, want)
 	}
 }

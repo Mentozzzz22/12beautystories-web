@@ -635,15 +635,10 @@ func scanOrderListItem(row pgx.Row, it *OrderListItem, extra ...any) error {
 
 var orderNumberPattern = regexp.MustCompile(`^(?:BS-?)?0*(\d{1,9})$`)
 
-// Orders lists orders, newest first. Query matches the phone, name or order number.
-func (p *Postgres) Orders(ctx context.Context, f OrderFilter) (OrderPage, error) {
-	page := max(f.Page, 1)
-	q := strings.TrimSpace(f.Query)
-	var orderID int64
-	if m := orderNumberPattern.FindStringSubmatch(strings.ToUpper(q)); m != nil {
-		orderID, _ = strconv.ParseInt(m[1], 10, 64)
-	}
-	digits := strings.Map(func(r rune) rune {
+// searchTerms turns a search box value into an ILIKE pattern for names and the digits to look for
+// in phones. Callers match phones only when there are at least 4 digits.
+func searchTerms(q string) (namePattern, digits string) {
+	digits = strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
 			return r
 		}
@@ -653,10 +648,21 @@ func (p *Postgres) Orders(ctx context.Context, f OrderFilter) (OrderPage, error)
 	if strings.HasPrefix(digits, "8") {
 		digits = "7" + digits[1:]
 	}
-	namePattern := ""
 	if q != "" {
 		namePattern = "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
 	}
+	return namePattern, digits
+}
+
+// Orders lists orders, newest first. Query matches the phone, name or order number.
+func (p *Postgres) Orders(ctx context.Context, f OrderFilter) (OrderPage, error) {
+	page := max(f.Page, 1)
+	q := strings.TrimSpace(f.Query)
+	var orderID int64
+	if m := orderNumberPattern.FindStringSubmatch(strings.ToUpper(q)); m != nil {
+		orderID, _ = strconv.ParseInt(m[1], 10, 64)
+	}
+	namePattern, digits := searchTerms(q)
 
 	rows, err := p.db.Query(ctx, `
 		SELECT `+orderListColumns+`, count(*) OVER ()
@@ -693,9 +699,9 @@ func (p *Postgres) Order(ctx context.Context, id int64) (Order, error) {
 func getOrder(ctx context.Context, q querier, id int64) (Order, error) {
 	var o Order
 	err := scanOrderListItem(q.QueryRow(ctx, `
-		SELECT `+orderListColumns+`, o.address, o.comment, o.promo_code, o.subtotal, o.discount_total
+		SELECT `+orderListColumns+`, o.customer_id, o.address, o.comment, o.promo_code, o.subtotal, o.discount_total
 		FROM orders o WHERE o.id = $1`, id),
-		&o.OrderListItem, &o.Address, &o.Comment, &o.PromoCode, &o.Subtotal, &o.DiscountTotal)
+		&o.OrderListItem, &o.CustomerID, &o.Address, &o.Comment, &o.PromoCode, &o.Subtotal, &o.DiscountTotal)
 	if err != nil {
 		return Order{}, mapErr(err)
 	}
@@ -774,4 +780,137 @@ func (p *Postgres) NewOrdersCount(ctx context.Context) (int, error) {
 	var n int
 	err := p.db.QueryRow(ctx, `SELECT count(*) FROM orders WHERE status = 'new'`).Scan(&n)
 	return n, err
+}
+
+// ---- Customers ----
+
+// customerColumns needs the customerStats join aliased as s.
+const customerColumns = `
+	c.id, c.name, c.phone, c.marketing_consent,
+	COALESCE(s.order_count, 0), COALESCE(s.total_spent, 0), s.last_order_at, c.created_at`
+
+// customerStats aggregates non-cancelled orders, so cancelling an order updates the numbers at once.
+const customerStats = `
+	LEFT JOIN LATERAL (
+		SELECT count(*)::int AS order_count, sum(total)::bigint AS total_spent, max(created_at) AS last_order_at
+		FROM orders WHERE customer_id = c.id AND status <> 'cancelled'
+	) s ON true`
+
+var customerOrderings = map[string]string{
+	SortRecent:   `s.last_order_at DESC NULLS LAST`,
+	SortSpent:    `COALESCE(s.total_spent, 0) DESC`,
+	SortOrders:   `COALESCE(s.order_count, 0) DESC`,
+	SortInactive: `s.last_order_at ASC NULLS LAST`,
+}
+
+func scanCustomerListItem(row pgx.Row, it *CustomerListItem, extra ...any) error {
+	dest := append([]any{&it.ID, &it.Name, &it.Phone, &it.MarketingConsent,
+		&it.OrderCount, &it.TotalSpent, &it.LastOrderAt, &it.CreatedAt}, extra...)
+	return row.Scan(dest...)
+}
+
+// Customers lists customers. Query matches the name or phone.
+func (p *Postgres) Customers(ctx context.Context, f CustomerFilter) (CustomerPage, error) {
+	page := max(f.Page, 1)
+	limit := PageSize
+	items, total, err := p.queryCustomers(ctx, f, &limit, (page-1)*PageSize)
+	if err != nil {
+		return CustomerPage{}, err
+	}
+	return CustomerPage{Items: items, Total: total, Page: page, PageSize: PageSize}, nil
+}
+
+// ExportCustomers returns every customer matching the filter, for a CSV download.
+func (p *Postgres) ExportCustomers(ctx context.Context, f CustomerFilter) ([]CustomerListItem, error) {
+	items, _, err := p.queryCustomers(ctx, f, nil, 0)
+	return items, err
+}
+
+// queryCustomers runs the list query; a nil limit returns all rows.
+func (p *Postgres) queryCustomers(ctx context.Context, f CustomerFilter, limit *int, offset int) ([]CustomerListItem, int, error) {
+	order, ok := customerOrderings[f.Sort]
+	if !ok {
+		order = customerOrderings[SortRecent]
+	}
+	namePattern, digits := searchTerms(strings.TrimSpace(f.Query))
+
+	// order comes from customerOrderings, never from user input.
+	rows, err := p.db.Query(ctx, `
+		SELECT `+customerColumns+`, count(*) OVER ()
+		FROM customers c`+customerStats+`
+		WHERE ($1 = '' OR c.name ILIKE $1 OR (length($2) >= 4 AND c.phone LIKE '%' || $2 || '%'))
+		  AND (NOT $3 OR c.marketing_consent)
+		ORDER BY `+order+`, c.id DESC
+		LIMIT $4 OFFSET $5`,
+		namePattern, digits, f.Marketing, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query customers: %w", err)
+	}
+	defer rows.Close()
+
+	items := []CustomerListItem{}
+	var total int
+	for rows.Next() {
+		var it CustomerListItem
+		if err := scanCustomerListItem(rows, &it, &total); err != nil {
+			return nil, 0, fmt.Errorf("scan customer: %w", err)
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate customers: %w", err)
+	}
+	return items, total, nil
+}
+
+// Customer returns the customer card with all orders, including cancelled ones.
+func (p *Postgres) Customer(ctx context.Context, id int64) (Customer, error) {
+	var c Customer
+	err := scanCustomerListItem(p.db.QueryRow(ctx, `
+		SELECT `+customerColumns+`, c.note, c.marketing_consent_at
+		FROM customers c`+customerStats+`
+		WHERE c.id = $1`, id),
+		&c.CustomerListItem, &c.Note, &c.MarketingConsentAt)
+	if err != nil {
+		return Customer{}, mapErr(err)
+	}
+
+	rows, err := p.db.Query(ctx, `
+		SELECT `+orderListColumns+`
+		FROM orders o WHERE o.customer_id = $1
+		ORDER BY o.created_at DESC, o.id DESC`, id)
+	if err != nil {
+		return Customer{}, fmt.Errorf("query customer orders: %w", err)
+	}
+	defer rows.Close()
+	c.Orders = []OrderListItem{}
+	for rows.Next() {
+		var it OrderListItem
+		if err := scanOrderListItem(rows, &it); err != nil {
+			return Customer{}, fmt.Errorf("scan order: %w", err)
+		}
+		c.Orders = append(c.Orders, it)
+	}
+	if err := rows.Err(); err != nil {
+		return Customer{}, fmt.Errorf("iterate orders: %w", err)
+	}
+	return c, nil
+}
+
+// UpdateCustomer saves the owner's edits. Changing the marketing consent records when it happened.
+func (p *Postgres) UpdateCustomer(ctx context.Context, id int64, u CustomerUpdate) (Customer, error) {
+	if err := u.validate(); err != nil {
+		return Customer{}, err
+	}
+	// SET expressions see the old row, so the CASE compares against the previous consent.
+	if err := affected(p.db.Exec(ctx, `
+		UPDATE customers SET
+			name = $2,
+			note = $3,
+			marketing_consent = $4,
+			marketing_consent_at = CASE WHEN marketing_consent <> $4 THEN now() ELSE marketing_consent_at END
+		WHERE id = $1`, id, u.Name, u.Note, u.MarketingConsent)); err != nil {
+		return Customer{}, err
+	}
+	return p.Customer(ctx, id)
 }

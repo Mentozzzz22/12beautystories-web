@@ -144,6 +144,8 @@ export interface Customer {
   delivery: DeliveryMethod
   address: string
   comment: string
+  privacyAccepted: boolean
+  marketingConsent: boolean
 }
 
 export interface Order {

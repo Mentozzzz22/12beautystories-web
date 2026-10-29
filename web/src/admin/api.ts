@@ -5,6 +5,10 @@ import type {
   Banner,
   Brand,
   Category,
+  Customer,
+  CustomerFilter,
+  CustomerListItem,
+  CustomerUpdate,
   Line,
   Order,
   OrderPage,
@@ -31,6 +35,10 @@ function qs(params: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : ''
 }
 
+function customerQuery(f: CustomerFilter): string {
+  return qs({ q: f.q, marketing: f.marketing ? 1 : 0, sort: f.sort, page: f.page })
+}
+
 export const adminApi = {
   me: () => request<AdminUser>(`${BASE}/me`),
   login: (email: string, password: string) =>
@@ -51,6 +59,15 @@ export const adminApi = {
   order: (id: number) => request<Order>(`${BASE}/orders/${id}`),
   setOrderStatus: (id: number, status: OrderStatus) =>
     request<Order>(`${BASE}/orders/${id}/status`, json('PUT', { status })),
+
+  customers: (f: CustomerFilter) =>
+    request<Page<CustomerListItem>>(`${BASE}/customers${customerQuery(f)}`),
+  customer: (id: number) => request<Customer>(`${BASE}/customers/${id}`),
+  updateCustomer: (id: number, u: CustomerUpdate) =>
+    request<Customer>(`${BASE}/customers/${id}`, json('PUT', u)),
+  /** Plain link: the browser downloads the file with the session cookie. */
+  customersExportUrl: (f: CustomerFilter) =>
+    `${BASE}/customers/export.csv${customerQuery({ ...f, page: 0 })}`,
 
   upload: (file: File) => {
     const body = new FormData()

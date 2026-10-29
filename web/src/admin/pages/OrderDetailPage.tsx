@@ -20,6 +20,9 @@ export function OrderDetailPage() {
     onSuccess: (o) => {
       qc.setQueryData(['admin', 'order', id], o)
       void qc.invalidateQueries({ queryKey: ['admin', 'orders'] })
+      // Customer statistics skip cancelled orders, so a status change moves them.
+      void qc.invalidateQueries({ queryKey: ['admin', 'customers'] })
+      void qc.invalidateQueries({ queryKey: ['admin', 'customer', o.customerId] })
     },
   })
 
@@ -49,7 +52,10 @@ export function OrderDetailPage() {
         <div className="space-y-6">
           <section className="rounded-2xl bg-white p-5">
             <h2 className="mb-3 text-xl">Клиент</h2>
-            <p className="font-medium">{o.customerName}</p>
+            <Link to={`/admin/customers/${o.customerId}`} className="font-medium hover:underline">
+              {o.customerName}
+            </Link>
+            <br />
             <a href={`tel:${o.phone}`} className="text-sm text-muted hover:text-ink">
               {o.phone}
             </a>

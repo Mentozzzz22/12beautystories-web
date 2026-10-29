@@ -20,6 +20,8 @@ const FIELD_ERRORS: Record<string, string> = {
   too_long: 'Слишком длинно',
 }
 
+const PRIVACY_REQUIRED = 'Без согласия мы не сможем принять заказ'
+
 type FormErrors = Partial<Record<keyof Customer, string>>
 
 export function CheckoutPage() {
@@ -31,6 +33,9 @@ export function CheckoutPage() {
     delivery: 'pickup',
     address: '',
     comment: '',
+    privacyAccepted: false,
+    // Must stay unchecked by default: a pre-ticked box is not valid consent.
+    marketingConsent: false,
   })
   const [errors, setErrors] = useState<FormErrors>({})
 
@@ -44,7 +49,9 @@ export function CheckoutPage() {
           Object.fromEntries(
             Object.entries(err.fields).map(([k, v]) => [
               k,
-              FIELD_ERRORS[v] ?? FIELD_ERRORS.invalid,
+              k === 'privacyAccepted'
+                ? PRIVACY_REQUIRED
+                : (FIELD_ERRORS[v] ?? FIELD_ERRORS.invalid),
             ]),
           ),
         )
@@ -65,6 +72,7 @@ export function CheckoutPage() {
     if (!form.name.trim()) next.name = FIELD_ERRORS.required
     if (!isCompletePhone(form.phone)) next.phone = 'Введите номер полностью'
     if (form.delivery !== 'pickup' && !form.address.trim()) next.address = FIELD_ERRORS.required
+    if (!form.privacyAccepted) next.privacyAccepted = PRIVACY_REQUIRED
     setErrors(next)
     if (Object.keys(next).length === 0) placeOrder.mutate()
   }
@@ -162,6 +170,21 @@ export function CheckoutPage() {
             заказе
           </p>
           <OrderSummary quote={quote} fallbackSubtotal={fallbackSubtotal} />
+          <div className="space-y-3">
+            <Checkbox
+              checked={form.privacyAccepted}
+              onChange={(v) => set('privacyAccepted', v)}
+              error={errors.privacyAccepted}
+            >
+              Согласен(на) на обработку персональных данных и принимаю{' '}
+              <Link to={routes.privacy} target="_blank" className="underline hover:text-ink">
+                политику конфиденциальности
+              </Link>
+            </Checkbox>
+            <Checkbox checked={form.marketingConsent} onChange={(v) => set('marketingConsent', v)}>
+              Хочу получать новости об акциях и новинках в WhatsApp
+            </Checkbox>
+          </div>
           {serverError && (
             <p role="alert" className="text-sm text-sale">
               {serverError}
@@ -192,6 +215,34 @@ function describeError(err: ApiError): string {
     default:
       return 'Не удалось оформить заказ. Попробуйте ещё раз или напишите нам в Instagram.'
   }
+}
+
+function Checkbox({
+  checked,
+  onChange,
+  error,
+  children,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  error?: string
+  children: ReactNode
+}) {
+  return (
+    <div>
+      <label className="flex cursor-pointer items-start gap-3 text-xs leading-relaxed text-muted">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-invalid={error ? true : undefined}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-ink"
+        />
+        <span>{children}</span>
+      </label>
+      {error && <p className="mt-1.5 pl-7 text-xs text-sale">{error}</p>}
+    </div>
+  )
 }
 
 function Field({

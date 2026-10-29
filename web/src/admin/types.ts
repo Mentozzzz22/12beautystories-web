@@ -156,6 +156,7 @@ export interface OrderItem {
 }
 
 export interface Order extends OrderListItem {
+  customerId: number
   address: string
   comment: string
   promoCode: string
@@ -166,4 +167,37 @@ export interface Order extends OrderListItem {
 
 export interface OrderPage extends Page<OrderListItem> {
   newCount: number
+}
+
+export interface CustomerListItem {
+  id: number
+  name: string
+  phone: string
+  marketingConsent: boolean
+  /** Statistics ignore cancelled orders. */
+  orderCount: number
+  totalSpent: number
+  lastOrderAt: string | null
+  createdAt: string
+}
+
+export interface Customer extends CustomerListItem {
+  note: string
+  marketingConsentAt: string | null
+  orders: OrderListItem[]
+}
+
+export interface CustomerUpdate {
+  name: string
+  note: string
+  marketingConsent: boolean
+}
+
+export type CustomerSort = 'recent' | 'spent' | 'orders' | 'inactive'
+
+export interface CustomerFilter {
+  q: string
+  marketing: boolean
+  sort: CustomerSort
+  page: number
 }

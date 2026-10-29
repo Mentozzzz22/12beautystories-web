@@ -77,6 +77,9 @@ export function Layout() {
             >
               {site.whatsappDisplay}
             </a>
+            <Link to={routes.privacy} className="mt-3 block text-xs text-muted hover:text-ink">
+              Политика конфиденциальности
+            </Link>
           </div>
           <div className="flex gap-3">
             <a

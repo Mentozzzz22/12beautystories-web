@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -113,6 +114,55 @@ func TestCreateReservesStockAndPromo(t *testing.T) {
 	_ = pool.QueryRow(ctx, `SELECT used_count FROM promo_codes WHERE code = 'WELCOME5'`).Scan(&used)
 	if items != 1 || used != 1 {
 		t.Errorf("items = %d, promo used = %d; want 1 and 1", items, used)
+	}
+}
+
+func TestCreateLinksCustomerAndKeepsConsent(t *testing.T) {
+	pool, store := setup(t)
+	ctx := context.Background()
+	id := variantID(t, pool, "davines-energizing-shampoo", "250 ml")
+
+	place := func(name string, marketing bool) order.Order {
+		t.Helper()
+		o := testOrder(id, 1, "")
+		o.Customer.Name = name
+		o.Customer.MarketingConsent = marketing
+		created, err := store.Create(ctx, o)
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return created
+	}
+
+	first := place("Айгерим", true)
+	second := place("Айгерим Сапарова", false)
+
+	var (
+		customers, linked int
+		name              string
+		consent           bool
+		consentAt, accept *time.Time
+	)
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM customers`).Scan(&customers)
+	_ = pool.QueryRow(ctx, `SELECT count(DISTINCT customer_id) FROM orders WHERE id IN ($1, $2)`,
+		first.ID, second.ID).Scan(&linked)
+	if err := pool.QueryRow(ctx, `SELECT name, marketing_consent, marketing_consent_at FROM customers`).
+		Scan(&name, &consent, &consentAt); err != nil {
+		t.Fatalf("read customer: %v", err)
+	}
+	_ = pool.QueryRow(ctx, `SELECT privacy_accepted_at FROM orders WHERE id = $1`, second.ID).Scan(&accept)
+
+	if customers != 1 || linked != 1 {
+		t.Errorf("customers = %d, distinct links = %d; want one customer for both orders", customers, linked)
+	}
+	if name != "Айгерим Сапарова" {
+		t.Errorf("name = %q, want the latest one", name)
+	}
+	if !consent || consentAt == nil {
+		t.Errorf("consent = %v at %v; an unchecked box must not withdraw it", consent, consentAt)
+	}
+	if accept == nil {
+		t.Error("privacy_accepted_at is not set")
 	}
 }
 

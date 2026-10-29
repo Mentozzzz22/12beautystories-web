@@ -192,6 +192,7 @@ type OrderItem struct {
 // Order is the full order card.
 type Order struct {
 	OrderListItem
+	CustomerID    int64       `json:"customerId"`
 	Address       string      `json:"address"`
 	Comment       string      `json:"comment"`
 	PromoCode     string      `json:"promoCode"`
@@ -213,6 +214,58 @@ type OrderPage struct {
 	Total    int             `json:"total"`
 	Page     int             `json:"page"`
 	PageSize int             `json:"pageSize"`
+}
+
+// CustomerListItem is a row in the customers table. Statistics ignore cancelled orders.
+type CustomerListItem struct {
+	ID               int64      `json:"id"`
+	Name             string     `json:"name"`
+	Phone            string     `json:"phone"`
+	MarketingConsent bool       `json:"marketingConsent"`
+	OrderCount       int        `json:"orderCount"`
+	TotalSpent       int64      `json:"totalSpent"`
+	LastOrderAt      *time.Time `json:"lastOrderAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// Customer is the customer card with the order history.
+type Customer struct {
+	CustomerListItem
+	Note               string          `json:"note"`
+	MarketingConsentAt *time.Time      `json:"marketingConsentAt"`
+	Orders             []OrderListItem `json:"orders"`
+}
+
+// CustomerUpdate is what the owner can change on a customer card.
+type CustomerUpdate struct {
+	Name             string `json:"name"`
+	Note             string `json:"note"`
+	MarketingConsent bool   `json:"marketingConsent"`
+}
+
+// Customer list orderings.
+const (
+	SortRecent   = "recent"   // latest order first
+	SortSpent    = "spent"    // biggest buyers first
+	SortOrders   = "orders"   // most orders first
+	SortInactive = "inactive" // longest without an order first
+)
+
+// CustomerFilter narrows the customer list.
+type CustomerFilter struct {
+	Query string
+	// Marketing keeps only customers who agreed to receive promotions.
+	Marketing bool
+	Sort      string
+	Page      int
+}
+
+// CustomerPage is a page of customers.
+type CustomerPage struct {
+	Items    []CustomerListItem `json:"items"`
+	Total    int                `json:"total"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"pageSize"`
 }
 
 // PageSize is the admin list page size.
@@ -411,6 +464,13 @@ func (p *Promo) validate() error {
 		v.Add("maxUses", apperr.Invalid)
 	}
 	v.period(p.StartsAt, p.EndsAt)
+	return v.Err()
+}
+
+func (c *CustomerUpdate) validate() error {
+	v := newValidator()
+	v.text("name", &c.Name, true, maxName)
+	v.text("note", &c.Note, false, maxText)
 	return v.Err()
 }
 

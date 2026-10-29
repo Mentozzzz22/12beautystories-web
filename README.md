@@ -18,6 +18,10 @@ It replaces a paid site builder with a small Go + PostgreSQL backend and a React
   variants and photo gallery, brands and lines, categories, banners with scheduling, promo codes,
   discount rules with an on/off switch
 - Cancelling an order returns items to stock; reopening reserves them again
+- **Customers** identified by phone: order count, total spent and last order computed from orders
+  (cancelled ones excluded), owner notes, CSV export for Excel
+- Checkout consent: mandatory personal data consent with a privacy policy page, optional opt-in for
+  promotions with its timestamp
 - Admin sessions: bcrypt passwords, SHA-256 hashed session tokens, `HttpOnly` + `SameSite=Strict` cookie,
   login rate limiting
 - Image uploads are decoded, downscaled and re-encoded, which strips EXIF data and rejects SVG/HTML

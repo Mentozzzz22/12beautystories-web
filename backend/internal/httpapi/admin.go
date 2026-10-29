@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"io"
 	"net"
@@ -50,6 +51,11 @@ type AdminStore interface {
 	Order(ctx context.Context, id int64) (admin.Order, error)
 	SetOrderStatus(ctx context.Context, id int64, status string) (admin.Order, error)
 	NewOrdersCount(ctx context.Context) (int, error)
+
+	Customers(ctx context.Context, f admin.CustomerFilter) (admin.CustomerPage, error)
+	ExportCustomers(ctx context.Context, f admin.CustomerFilter) ([]admin.CustomerListItem, error)
+	Customer(ctx context.Context, id int64) (admin.Customer, error)
+	UpdateCustomer(ctx context.Context, id int64, u admin.CustomerUpdate) (admin.Customer, error)
 }
 
 // Authenticator manages admin sessions.
@@ -117,6 +123,11 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	protected.HandleFunc("GET /api/admin/orders", a.adminOrders)
 	protected.HandleFunc("GET /api/admin/orders/{id}", get(a, s.Order))
 	protected.HandleFunc("PUT /api/admin/orders/{id}/status", a.setOrderStatus)
+
+	protected.HandleFunc("GET /api/admin/customers", a.adminCustomers)
+	protected.HandleFunc("GET /api/admin/customers/export.csv", a.exportCustomers)
+	protected.HandleFunc("GET /api/admin/customers/{id}", get(a, s.Customer))
+	protected.HandleFunc("PUT /api/admin/customers/{id}", a.updateCustomer)
 
 	if a.Uploads != nil {
 		protected.HandleFunc("POST /api/admin/uploads", a.upload)
@@ -264,6 +275,99 @@ func (a *API) setOrderStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, o)
+}
+
+func customerFilter(r *http.Request) admin.CustomerFilter {
+	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	return admin.CustomerFilter{Query: q.Get("q"), Marketing: q.Get("marketing") == "1", Sort: q.Get("sort"), Page: page}
+}
+
+func (a *API) adminCustomers(w http.ResponseWriter, r *http.Request) {
+	res, err := a.Admin.Customers(r.Context(), customerFilter(r))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (a *API) updateCustomer(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in admin.CustomerUpdate
+	if !a.decode(w, r, &in) {
+		return
+	}
+	c, err := a.Admin.UpdateCustomer(r.Context(), id, in)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
+}
+
+// exportCustomers downloads the filtered list as CSV that opens correctly in Excel with a Russian
+// locale: UTF-8 with BOM, semicolon separated, phones in the local "8 701 ..." format so they stay text.
+func (a *API) exportCustomers(w http.ResponseWriter, r *http.Request) {
+	items, err := a.Admin.ExportCustomers(r.Context(), customerFilter(r))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="customers.csv"`)
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.WriteString(w, utf8BOM)
+
+	cw := csv.NewWriter(w)
+	cw.Comma = ';'
+	cw.UseCRLF = true
+	_ = cw.Write([]string{"Имя", "Телефон", "Заказов", "Сумма, ₸", "Последний заказ", "Согласие на рассылку"})
+	for _, c := range items {
+		last := ""
+		if c.LastOrderAt != nil {
+			last = c.LastOrderAt.In(almaty).Format("02.01.2006")
+		}
+		consent := "нет"
+		if c.MarketingConsent {
+			consent = "да"
+		}
+		_ = cw.Write([]string{
+			csvSafe(c.Name), localPhone(c.Phone), strconv.Itoa(c.OrderCount),
+			strconv.FormatInt(c.TotalSpent, 10), last, consent,
+		})
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		a.Log.ErrorContext(r.Context(), "write customers csv", "err", err)
+	}
+}
+
+// utf8BOM makes Excel detect UTF-8 in CSV files.
+const utf8BOM = string(rune(0xFEFF))
+
+// almaty is the shop's time zone (UTC+5 for the whole country since 2024).
+var almaty = time.FixedZone("Asia/Almaty", 5*60*60)
+
+// csvSafe stops spreadsheets from treating customer-entered text as a formula.
+func csvSafe(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
+}
+
+// localPhone renders "+77011234567" as "8 701 123 45 67".
+func localPhone(e164 string) string {
+	d := strings.TrimPrefix(e164, "+7")
+	if len(d) != 10 {
+		return csvSafe(e164)
+	}
+	return "8 " + d[:3] + " " + d[3:6] + " " + d[6:8] + " " + d[8:]
 }
 
 func (a *API) upload(w http.ResponseWriter, r *http.Request) {

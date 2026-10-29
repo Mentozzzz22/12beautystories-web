@@ -23,6 +23,14 @@ export const DELIVERY_LABELS: Record<OrderListItem['delivery'], string> = {
   post: 'Почта',
 }
 
+export function formatDay(iso: string): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(iso))
+}
+
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',

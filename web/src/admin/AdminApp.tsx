@@ -3,6 +3,8 @@ import { AdminLayout } from './AdminLayout'
 import { BannersPage } from './pages/BannersPage'
 import { BrandsPage } from './pages/BrandsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
+import { CustomerDetailPage } from './pages/CustomerDetailPage'
+import { CustomersPage } from './pages/CustomersPage'
 import { LoginPage } from './pages/LoginPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { OrdersPage } from './pages/OrdersPage'
@@ -19,6 +21,8 @@ const adminRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="orders" replace /> },
       { path: 'orders', element: <OrdersPage /> },
       { path: 'orders/:id', element: <OrderDetailPage /> },
+      { path: 'customers', element: <CustomersPage /> },
+      { path: 'customers/:id', element: <CustomerDetailPage /> },
       { path: 'products', element: <ProductsPage /> },
       { path: 'products/:id', element: <ProductEditPage /> },
       { path: 'brands', element: <BrandsPage /> },

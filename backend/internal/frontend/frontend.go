@@ -170,6 +170,9 @@ func (h *Handler) resolve(ctx context.Context, p string) (Meta, int) {
 	case parts[0] == "catalog":
 		meta.Title = "Каталог | " + siteName
 
+	case parts[0] == "privacy":
+		meta.Title = "Политика конфиденциальности | " + siteName
+
 	case parts[0] == "admin" || parts[0] == "cart" || parts[0] == "checkout" || parts[0] == "order":
 		meta.NoIndex = true
 	}
