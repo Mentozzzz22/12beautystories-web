@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { cartCount, useCart } from '../lib/cart'
-import { routes, site } from '../lib/site'
+import { routes, site, whatsappLink } from '../lib/site'
 import { BagIcon, InstagramIcon, MenuIcon, SearchIcon, WhatsAppIcon } from './icons'
 import { MenuDrawer } from './MenuDrawer'
 
@@ -71,6 +71,12 @@ export function Layout() {
             <p className="mt-1 text-sm text-muted">
               Профессиональный уход за волосами и кожей · {site.city}
             </p>
+            <a
+              href={`tel:${site.whatsappPhone}`}
+              className="mt-1 block text-sm text-muted hover:text-ink"
+            >
+              {site.whatsappDisplay}
+            </a>
           </div>
           <div className="flex gap-3">
             <a
@@ -81,12 +87,7 @@ export function Layout() {
             >
               <InstagramIcon width={18} height={18} /> Instagram
             </a>
-            <a
-              href={site.whatsappUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-outline py-2"
-            >
+            <a href={whatsappLink()} target="_blank" rel="noreferrer" className="btn-outline py-2">
               <WhatsAppIcon width={18} height={18} /> WhatsApp
             </a>
           </div>

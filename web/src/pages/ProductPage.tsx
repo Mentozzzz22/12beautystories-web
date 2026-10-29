@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useProduct } from '../api/queries'
 import type { Media, Product, Variant } from '../api/types'
+import { WhatsAppIcon } from '../components/icons'
 import { Price } from '../components/Price'
 import { cart } from '../lib/cart'
-import { routes } from '../lib/site'
+import { routes, whatsappLink } from '../lib/site'
 import { NotFoundPage } from './NotFoundPage'
 
 export function ProductPage() {
@@ -118,6 +119,17 @@ export function ProductView({ product }: { product: Product }) {
               Товар добавлен в корзину
             </p>
           )}
+          <a
+            href={whatsappLink(
+              undefined,
+              `Здравствуйте! Вопрос по товару: ${product.name}${variant.label ? `, ${variant.label}` : ''}`,
+            )}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex items-center gap-2 text-sm text-muted hover:text-ink"
+          >
+            <WhatsAppIcon width={18} height={18} /> Задать вопрос в WhatsApp
+          </a>
 
           {product.description && (
             <section className="mt-10">

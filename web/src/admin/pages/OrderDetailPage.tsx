@@ -3,16 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { WhatsAppIcon } from '../../components/icons'
 import { formatTenge } from '../../lib/format'
+import { whatsappLink } from '../../lib/site'
 import { adminApi } from '../api'
 import { Badge, Loading } from '../components/ui'
 import { errorMessage } from '../errors'
-import {
-  DELIVERY_LABELS,
-  formatDate,
-  ORDER_STATUSES,
-  statusInfo,
-  whatsappLink,
-} from '../orderStatus'
+import { DELIVERY_LABELS, formatDate, ORDER_STATUSES, statusInfo } from '../orderStatus'
 import type { OrderStatus } from '../types'
 
 export function OrderDetailPage() {

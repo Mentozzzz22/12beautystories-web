@@ -23,13 +23,6 @@ export const DELIVERY_LABELS: Record<OrderListItem['delivery'], string> = {
   post: 'Почта',
 }
 
-/** wa.me link with a greeting that names the order. */
-export function whatsappLink(phone: string, text?: string): string {
-  const digits = phone.replace(/\D/g, '')
-  const q = text ? `?text=${encodeURIComponent(text)}` : ''
-  return `https://wa.me/${digits}${q}`
-}
-
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',

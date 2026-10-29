@@ -3,7 +3,7 @@
 Self-hosted online store for **12 Beauty Stories**, a professional hair and skin care boutique in Astana, Kazakhstan.
 It replaces a paid site builder with a small Go + PostgreSQL backend and a React storefront.
 
-> Status: storefront and admin panel MVP work end to end; deployment is next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> Status: storefront and admin panel MVP work end to end; production setup is ready, see [docs/DEPLOY.md](docs/DEPLOY.md). See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Features
 
@@ -21,6 +21,9 @@ It replaces a paid site builder with a small Go + PostgreSQL backend and a React
 - Admin sessions: bcrypt passwords, SHA-256 hashed session tokens, `HttpOnly` + `SameSite=Strict` cookie,
   login rate limiting
 - Image uploads are decoded, downscaled and re-encoded, which strips EXIF data and rejects SVG/HTML
+- Link previews: the Go server serves the built web app and fills page-specific title and Open Graph
+  tags (product photo, name, price), plus `sitemap.xml` and `robots.txt`
+- Production: 40 MB distroless non-root image, Caddy with automatic HTTPS, daily database and photo backups
 
 ## Tech stack
 
@@ -42,6 +45,7 @@ backend/
     apperr/            shared validation / not found / conflict errors
     auth/              admin accounts and sessions
     catalog/           storefront read model (menu, banners, products)
+    frontend/          serves the web build with SEO tags, sitemap, robots
     config/            environment configuration
     database/          pgx pool and embedded SQL migrations
     httpapi/           JSON API handlers and middleware (storefront + admin)
@@ -56,7 +60,10 @@ web/
   src/lib/             cart store (localStorage), formatting
   src/pages/           home, catalog, product, cart, checkout
   src/admin/           admin panel (lazy-loaded chunk)
-docs/ROADMAP.md
+deploy/                Caddyfile, backup script
+Dockerfile             multi-stage build (web + Go) into a distroless image
+docker-compose.prod.yml
+docs/ROADMAP.md, docs/DEPLOY.md
 ```
 
 ## Getting started

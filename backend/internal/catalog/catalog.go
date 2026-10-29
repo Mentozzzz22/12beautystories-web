@@ -1,7 +1,10 @@
 // Package catalog exposes the read side of the storefront: menu, banners and products.
 package catalog
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ErrNotFound is returned when a requested entity does not exist or is hidden.
 var ErrNotFound = errors.New("not found")
@@ -143,4 +146,10 @@ type Page struct {
 	Total    int              `json:"total"`
 	Page     int              `json:"page"`
 	PageSize int              `json:"pageSize"`
+}
+
+// SitemapProduct is a product URL entry for sitemap.xml.
+type SitemapProduct struct {
+	Slug      string
+	UpdatedAt time.Time
 }

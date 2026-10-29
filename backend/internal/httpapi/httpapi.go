@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/apperr"
@@ -39,7 +40,9 @@ type Deps struct {
 	Auth    Authenticator
 	Uploads Uploader
 	// UploadDir is served under /uploads/.
-	UploadDir    string
+	UploadDir string
+	// Frontend serves the web app for every other GET request; nil in development (Vite serves it).
+	Frontend     http.Handler
 	CookieSecure bool
 	TrustProxy   bool
 	Log          *slog.Logger
@@ -68,6 +71,9 @@ func New(d Deps) http.Handler {
 	}
 	if d.Admin != nil && d.Auth != nil {
 		a.registerAdmin(mux)
+	}
+	if d.Frontend != nil {
+		mux.Handle("/", frontendFallback(d.Frontend))
 	}
 
 	return a.recoverer(a.logRequests(mux))
@@ -252,5 +258,20 @@ func (a *API) recoverer(next http.Handler) http.Handler {
 			}
 		}()
 		next.ServeHTTP(w, r)
+	})
+}
+
+// frontendFallback serves the web app for page requests while unknown API paths keep JSON errors.
+func frontendFallback(web http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			writeError(w, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		web.ServeHTTP(w, r)
 	})
 }

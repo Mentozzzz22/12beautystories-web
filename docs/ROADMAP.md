@@ -47,8 +47,9 @@ Admin
 - [x] Orders: list, status, customer contacts
 
 Release
-- [ ] Open Graph tags for products, sitemap.xml
-- [ ] VPS deploy (Compose + Caddy), daily `pg_dump` backups
+- [x] Open Graph tags for products, sitemap.xml, robots.txt
+- [x] Production image, Compose + Caddy, daily `pg_dump` backups (see DEPLOY.md)
+- [ ] Rent the VPS and deploy
 - [ ] Domain switch from the old builder
 
 ## Phase 2: Growth

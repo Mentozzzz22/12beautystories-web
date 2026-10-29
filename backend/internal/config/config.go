@@ -19,6 +19,10 @@ type Config struct {
 	CookieSecure bool
 	// TrustProxy uses X-Forwarded-For for the client IP (only behind a reverse proxy).
 	TrustProxy bool
+	// StaticDir is the Vite build (web/dist) served for all non-API routes; empty disables it.
+	StaticDir string
+	// PublicURL is the site origin used in canonical links, Open Graph tags and the sitemap.
+	PublicURL string
 }
 
 // Load reads the configuration. DATABASE_URL is required.
@@ -31,6 +35,8 @@ func Load() (Config, error) {
 		UploadDir:        getenv("UPLOAD_DIR", "uploads"),
 		CookieSecure:     getbool("COOKIE_SECURE"),
 		TrustProxy:       getbool("TRUST_PROXY"),
+		StaticDir:        os.Getenv("STATIC_DIR"),
+		PublicURL:        getenv("PUBLIC_URL", "http://localhost:8080"),
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

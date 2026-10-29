@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/catalog"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/config"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/database"
+	"github.com/Mentozzzz22/12beautystories-web/backend/internal/frontend"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/httpapi"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/media"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/notify"
@@ -23,6 +25,10 @@ import (
 )
 
 func main() {
+	// The distroless image has no curl, so Docker's healthcheck calls the binary itself.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(healthcheck())
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
 		log.Error("server stopped", "err", err)
@@ -65,13 +71,24 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	catalogRepo := catalog.NewPostgres(pool)
+	var web http.Handler
+	if cfg.StaticDir != "" {
+		fe, err := frontend.New(cfg.StaticDir, cfg.PublicURL, catalogRepo, log)
+		if err != nil {
+			return err
+		}
+		web = fe
+	}
+
 	handler := httpapi.New(httpapi.Deps{
-		Catalog:      catalog.NewPostgres(pool),
+		Catalog:      catalogRepo,
 		Orders:       orders,
 		Admin:        admin.NewPostgres(pool),
 		Auth:         auth.NewService(pool),
 		Uploads:      uploads,
 		UploadDir:    cfg.UploadDir,
+		Frontend:     web,
 		CookieSecure: cfg.CookieSecure,
 		TrustProxy:   cfg.TrustProxy,
 		Log:          log,
@@ -103,4 +120,29 @@ func run(log *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+func healthcheck() int {
+	addr := os.Getenv("APP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/api/health", nil)
+	if err != nil {
+		return 1
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 1
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

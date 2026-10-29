@@ -26,3 +26,4 @@ uploads/
 # Local tooling
 .claude/
 *.log
+backups/

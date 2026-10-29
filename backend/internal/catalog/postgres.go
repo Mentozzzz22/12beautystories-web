@@ -230,3 +230,21 @@ func likePattern(q string) string {
 	q = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q)
 	return "%" + q + "%"
 }
+
+// SitemapProducts lists visible products for sitemap.xml.
+func (p *Postgres) SitemapProducts(ctx context.Context) ([]SitemapProduct, error) {
+	rows, err := p.db.Query(ctx, `
+		SELECT p.slug, p.updated_at
+		FROM products p
+		JOIN brands b ON b.id = p.brand_id AND b.is_active
+		WHERE p.is_active AND EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.is_active)
+		ORDER BY p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("query sitemap products: %w", err)
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[SitemapProduct])
+	if err != nil {
+		return nil, fmt.Errorf("collect sitemap products: %w", err)
+	}
+	return items, nil
+}

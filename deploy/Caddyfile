@@ -1,0 +1,24 @@
+# Caddy obtains and renews HTTPS certificates automatically for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Photo uploads from the admin panel can be up to 15 MB.
+	request_body {
+		max_size 20MB
+	}
+
+	reverse_proxy app:8080
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}

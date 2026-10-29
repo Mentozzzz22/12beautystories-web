@@ -1,0 +1,12 @@
+**/node_modules
+web/dist
+backend/bin
+uploads
+backups
+.env
+*.log
+.git
+.github
+.idea
+.claude
+docs

@@ -140,3 +140,22 @@ func TestOrderErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestFrontendFallbackDoesNotSwallowAPI(t *testing.T) {
+	web := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("app shell"))
+	})
+	h := New(Deps{Catalog: &fakeCatalog{}, Orders: &fakeOrders{}, Frontend: web,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+
+	if rec := do(t, h, http.MethodGet, "/products/anything", ""); rec.Body.String() != "app shell" {
+		t.Errorf("app route body = %q, want app shell", rec.Body)
+	}
+	rec := do(t, h, http.MethodGet, "/api/nope", "")
+	if rec.Code != http.StatusNotFound || errorCode(t, rec) != "not_found" {
+		t.Errorf("unknown API path: status %d, want JSON 404", rec.Code)
+	}
+	if rec := do(t, h, http.MethodGet, "/api/health", ""); rec.Code != http.StatusOK {
+		t.Errorf("health status = %d", rec.Code)
+	}
+}
