@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +24,7 @@ import (
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/media"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/notify"
 	"github.com/Mentozzzz22/12beautystories-web/backend/internal/order"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -39,6 +42,10 @@ func main() {
 func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if err := loadDotEnv("../.env"); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -145,4 +152,15 @@ func healthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+func loadDotEnv(path string) error {
+	err := godotenv.Load(path)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return fmt.Errorf("load %s: %w", path, err)
 }
