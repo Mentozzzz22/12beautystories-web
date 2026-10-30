@@ -2,6 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMenu, useProducts } from '../api/queries'
 import type { Menu } from '../api/types'
 import { ProductGrid, ProductGridSkeleton } from '../components/ProductCard'
+import { RichText } from '../components/RichText'
 import { plural } from '../lib/format'
 import { routes } from '../lib/site'
 
@@ -65,10 +66,20 @@ export function CatalogPage() {
         <div>
           <h1 className="text-4xl sm:text-5xl">{heading.title}</h1>
           {heading.description && (
-            <p className="mt-3 max-w-2xl text-sm text-muted">{heading.description}</p>
+            <p className="mt-3 max-w-2xl text-sm whitespace-pre-line text-muted">
+              <RichText text={heading.description} />
+            </p>
           )}
         </div>
       </div>
+
+      {heading.cover && (
+        <img
+          src={heading.cover}
+          alt={heading.title}
+          className="mt-6 aspect-[16/9] w-full rounded-3xl object-cover sm:aspect-[16/6]"
+        />
+      )}
 
       {chips.length > 0 && (
         <div className="-mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
@@ -159,9 +170,9 @@ function describe(menu: Menu | undefined, s: Selection) {
   else if (category) title = category.name
 
   const description = line?.description || (!line ? brand?.description : '') || ''
-  // Line pages prefer the line photo and fall back to the brand logo.
-  const image = (s.q ? '' : line?.imageUrl || brand?.logoUrl) || ''
-  return { title, crumbs, description, image }
+  const image = (s.q ? '' : brand?.logoUrl) || ''
+  const cover = (s.q ? '' : line?.imageUrl) || ''
+  return { title, crumbs, description, image, cover }
 }
 
 function buildChips(menu: Menu | undefined, s: Selection & { fromBrandRoute: boolean }): Chip[] {

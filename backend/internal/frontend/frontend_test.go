@@ -171,6 +171,12 @@ func TestSitemapAndRobots(t *testing.T) {
 	}
 }
 
+func TestTruncateRemovesFormatting(t *testing.T) {
+	if got := truncate("<b>Масло</b> для <i>блеска</i>\n<u>волос</u>", 160); got != "Масло для блеска волос" {
+		t.Errorf("truncate() = %q", got)
+	}
+}
+
 func TestNoIndexHidesSite(t *testing.T) {
 	h := newHandler(t)
 	h.NoIndex = true

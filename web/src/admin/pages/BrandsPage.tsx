@@ -1,8 +1,9 @@
 import { useBrands, useLines } from '../api'
 import { ImageField } from '../components/ImageUpload'
 import { ResourceModal } from '../components/ResourceModal'
+import { RichTextArea } from '../components/RichTextArea'
 import { useEditing } from '../useEditing'
-import { Badge, Empty, Loading, PageHeader, TextArea, TextField, Toggle } from '../components/ui'
+import { Badge, Empty, Loading, PageHeader, TextField, Toggle } from '../components/ui'
 import type { Brand, Line } from '../types'
 
 const newBrand = (): Brand => ({
@@ -115,7 +116,7 @@ export function BrandsPage() {
                 onChange={(v) => set('name', v)}
                 error={errors.name}
               />
-              <TextArea
+              <RichTextArea
                 label="Описание"
                 value={b.description}
                 onChange={(v) => set('description', v)}
@@ -156,12 +157,19 @@ export function BrandsPage() {
                 onChange={(v) => set('name', v)}
                 error={errors.name}
               />
-              <TextArea
+              <RichTextArea
                 label="Описание"
                 value={l.description}
                 onChange={(v) => set('description', v)}
                 hint="Показывается на странице линии"
                 rows={3}
+              />
+              <ImageField
+                label="Общее фото линии"
+                value={l.imageUrl}
+                onChange={(v) => set('imageUrl', v)}
+                aspect="aspect-[16/6]"
+                error={errors.imageUrl}
               />
               <Toggle
                 label="Показывать на сайте"

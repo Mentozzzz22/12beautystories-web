@@ -5,6 +5,7 @@ import { useProduct } from '../api/queries'
 import type { Media, Product, Variant } from '../api/types'
 import { WhatsAppIcon } from '../components/icons'
 import { Price } from '../components/Price'
+import { RichText } from '../components/RichText'
 import { cart } from '../lib/cart'
 import { routes, whatsappLink } from '../lib/site'
 import { NotFoundPage } from './NotFoundPage'
@@ -135,7 +136,7 @@ export function ProductView({ product }: { product: Product }) {
             <section className="mt-10">
               <h2 className="text-2xl">Описание</h2>
               <p className="mt-3 text-sm leading-relaxed whitespace-pre-line">
-                {product.description}
+                <RichText text={product.description} />
               </p>
             </section>
           )}
@@ -143,7 +144,7 @@ export function ProductView({ product }: { product: Product }) {
             <section className="mt-8">
               <h2 className="text-2xl">Активные ингредиенты</h2>
               <p className="mt-3 text-sm leading-relaxed whitespace-pre-line">
-                {product.ingredients}
+                <RichText text={product.ingredients} />
               </p>
             </section>
           )}

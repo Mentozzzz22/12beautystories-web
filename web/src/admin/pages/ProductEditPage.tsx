@@ -3,16 +3,9 @@ import { type FormEvent, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { adminApi, useBrands, useCategories } from '../api'
 import { GalleryField } from '../components/ImageUpload'
+import { RichTextArea } from '../components/RichTextArea'
 import { fieldErrors } from '../errors'
-import {
-  FormActions,
-  Loading,
-  NumberField,
-  SelectField,
-  TextArea,
-  TextField,
-  Toggle,
-} from '../components/ui'
+import { FormActions, Loading, NumberField, SelectField, TextField, Toggle } from '../components/ui'
 import type { OptionKind, Product, Variant } from '../types'
 
 const emptyVariant = (): Variant => ({
@@ -165,14 +158,14 @@ export function ProductForm({ initial }: { initial: Product }) {
             error={errors.categoryId}
           />
         </div>
-        <TextArea
+        <RichTextArea
           label="Описание"
           value={p.description}
           onChange={(v) => set('description', v)}
           error={errors.description}
           hint="3–4 предложения: для чего средство, текстура, результат"
         />
-        <TextArea
+        <RichTextArea
           label="Активные ингредиенты"
           value={p.ingredients}
           onChange={(v) => set('ingredients', v)}

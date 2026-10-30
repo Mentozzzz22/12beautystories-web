@@ -39,6 +39,9 @@ type Source interface {
 	SitemapProducts(ctx context.Context) ([]catalog.SitemapProduct, error)
 }
 
+// richTextTags removes the formatting tags of descriptions, which link previews show as plain text.
+var richTextTags = strings.NewReplacer("<b>", "", "</b>", "", "<i>", "", "</i>", "", "<u>", "", "</u>", "")
+
 // Handler serves static files from the Vite build and falls back to index.html for app routes.
 type Handler struct {
 	dir       string
@@ -308,7 +311,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func truncate(s string, limit int) string {
-	s = strings.Join(strings.Fields(s), " ")
+	s = strings.Join(strings.Fields(richTextTags.Replace(s)), " ")
 	if utf8.RuneCountInString(s) <= limit {
 		return s
 	}
