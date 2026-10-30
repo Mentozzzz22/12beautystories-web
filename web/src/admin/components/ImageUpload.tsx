@@ -33,12 +33,15 @@ export function ImageField({
   onChange,
   error,
   aspect = 'aspect-[16/6]',
+  fit = 'object-cover',
 }: {
   label: string
   value: string
   onChange: (url: string) => void
   error?: string
   aspect?: string
+  /** How the preview fits: match how the site shows this image. */
+  fit?: 'object-cover' | 'object-contain'
 }) {
   const input = useRef<HTMLInputElement>(null)
   const { upload, uploading, error: uploadError } = useUpload()
@@ -54,7 +57,7 @@ export function ImageField({
         }`}
       >
         {value ? (
-          <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={value} alt="" className={`absolute inset-0 h-full w-full ${fit}`} />
         ) : (
           <span className="text-sm text-muted">
             {uploading ? 'Загружаем…' : 'Нажмите, чтобы выбрать фото'}

@@ -77,7 +77,7 @@ export function CatalogPage() {
         <img
           src={heading.cover}
           alt={heading.title}
-          className="mt-6 aspect-[16/9] w-full rounded-3xl object-cover sm:aspect-[16/6]"
+          className="mt-6 h-56 w-full rounded-3xl bg-white object-contain sm:h-80 lg:h-[26rem]"
         />
       )}
 

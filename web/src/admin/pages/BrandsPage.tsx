@@ -128,6 +128,7 @@ export function BrandsPage() {
                 value={b.logoUrl}
                 onChange={(v) => set('logoUrl', v)}
                 aspect="aspect-[3/1]"
+                fit="object-contain"
                 error={errors.logoUrl}
               />
               <Toggle
@@ -166,6 +167,7 @@ export function BrandsPage() {
               />
               <ImageField
                 label="Общее фото линии"
+                fit="object-contain"
                 value={l.imageUrl}
                 onChange={(v) => set('imageUrl', v)}
                 aspect="aspect-[16/6]"
