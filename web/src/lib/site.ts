@@ -5,9 +5,10 @@ export const site = {
   // Shop's WhatsApp Business number, 8 705 518 18 29.
   whatsappPhone: '+77055181829',
   whatsappDisplay: '+7 705 518 18 29',
-  // Personal data operator shown in the privacy policy. Fill in before launch: "ИП ..." and the 12-digit IIN/BIN.
-  operatorName: '',
-  operatorBin: '',
+  // Personal data operator shown in the privacy policy.
+  operatorName: 'ИП 12-BEAUTYSTORIES',
+  operatorBin: '750822450176',
+  operatorAddress: 'пр. Кабанбай батыра, 11',
 } as const
 
 /** wa.me link; text pre-fills the first message. */
