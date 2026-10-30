@@ -54,10 +54,21 @@ export function CatalogPage() {
         ))}
       </nav>
 
-      <h1 className="mt-3 text-4xl sm:text-5xl">{heading.title}</h1>
-      {heading.description && (
-        <p className="mt-3 max-w-2xl text-sm text-muted">{heading.description}</p>
-      )}
+      <div className="mt-3 flex items-center gap-5">
+        {heading.image && (
+          <img
+            src={heading.image}
+            alt=""
+            className="h-20 w-20 shrink-0 rounded-2xl border border-line bg-white object-contain p-2 sm:h-28 sm:w-28"
+          />
+        )}
+        <div>
+          <h1 className="text-4xl sm:text-5xl">{heading.title}</h1>
+          {heading.description && (
+            <p className="mt-3 max-w-2xl text-sm text-muted">{heading.description}</p>
+          )}
+        </div>
+      </div>
 
       {chips.length > 0 && (
         <div className="-mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
@@ -148,7 +159,9 @@ function describe(menu: Menu | undefined, s: Selection) {
   else if (category) title = category.name
 
   const description = line?.description || (!line ? brand?.description : '') || ''
-  return { title, crumbs, description }
+  // Line pages prefer the line photo and fall back to the brand logo.
+  const image = (s.q ? '' : line?.imageUrl || brand?.logoUrl) || ''
+  return { title, crumbs, description, image }
 }
 
 function buildChips(menu: Menu | undefined, s: Selection & { fromBrandRoute: boolean }): Chip[] {

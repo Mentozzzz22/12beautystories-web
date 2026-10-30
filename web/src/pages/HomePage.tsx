@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useBanners, useMenu, useProducts } from '../api/queries'
 import { BannerCarousel } from '../components/BannerCarousel'
+import { BrandTiles } from '../components/BrandTiles'
 import { ProductGrid, ProductGridSkeleton } from '../components/ProductCard'
 import { routes } from '../lib/site'
 
@@ -20,17 +21,7 @@ export function HomePage() {
       {menu.data && menu.data.brands.length > 0 && (
         <section>
           <SectionTitle title="Бренды" />
-          <div className="flex flex-wrap gap-2">
-            {menu.data.brands.map((b) => (
-              <Link
-                key={b.id}
-                to={routes.brand(b.slug)}
-                className="rounded-full border border-line bg-white px-5 py-2.5 text-sm hover:border-ink"
-              >
-                {b.name}
-              </Link>
-            ))}
-          </div>
+          <BrandTiles brands={menu.data.brands} />
         </section>
       )}
 
