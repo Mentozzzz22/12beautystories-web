@@ -76,6 +76,7 @@ export interface Variant {
   price: number
   compareAtPrice?: number
   inStock: boolean
+  imageUrl?: string
 }
 
 export interface Product {

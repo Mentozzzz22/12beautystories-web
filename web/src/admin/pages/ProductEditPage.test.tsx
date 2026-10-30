@@ -54,7 +54,27 @@ const product: Product = {
   isActive: true,
   media: [],
   variants: [
-    { id: 0, label: '', sku: '', price: 0, compareAtPrice: null, stock: 0, isActive: true },
+    {
+      id: 0,
+      label: '',
+      sku: '',
+      price: 0,
+      compareAtPrice: null,
+      stock: 0,
+      isActive: true,
+      imageUrl: '',
+    },
+  ],
+}
+
+const withPhotos: Product = {
+  ...product,
+  name: 'OI Oil',
+  brandId: 1,
+  optionKind: 'volume',
+  media: [
+    { url: '/a.jpg', kind: 'image' },
+    { url: '/b.jpg', kind: 'image' },
   ],
 }
 
@@ -78,12 +98,12 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-function renderForm() {
+function renderForm(initial = product) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <ProductForm initial={product} />
+        <ProductForm initial={initial} />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -150,5 +170,44 @@ describe('ProductForm', () => {
     await user.click(screen.getByText('Один вариант'))
     expect(screen.queryByLabelText('Цвет')).not.toBeInTheDocument()
     expect(screen.getAllByLabelText('Цена')).toHaveLength(1)
+  })
+
+  const photo = (n: number) =>
+    screen.getByRole('button', { name: `Фото этого объёма: фото ${n}` })
+
+  it('saves the photo chosen for a variant and clears it on a second click', async () => {
+    const user = userEvent.setup()
+    renderForm(withPhotos)
+    await screen.findByRole('option', { name: 'Davines' })
+
+    await user.click(photo(1))
+    await user.click(photo(1))
+    expect(photo(1)).toHaveAttribute('aria-pressed', 'false')
+    await user.click(photo(2))
+    expect(photo(2)).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await screen.findByText('Сохранено')
+    expect(saved).toMatchObject({ variants: [{ imageUrl: '/b.jpg' }] })
+  })
+
+  it('clears the variant photo when it is removed from the gallery', async () => {
+    const user = userEvent.setup()
+    renderForm(withPhotos)
+    await screen.findByRole('option', { name: 'Davines' })
+
+    await user.click(photo(2))
+    await user.click(screen.getAllByRole('button', { name: 'Удалить фото' })[1]!)
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await screen.findByText('Сохранено')
+
+    expect(saved).toMatchObject({ variants: [{ imageUrl: '' }] })
+  })
+
+  it('offers no variant photos for a single-option product', async () => {
+    renderForm({ ...withPhotos, optionKind: 'none' })
+    await screen.findByRole('option', { name: 'Davines' })
+
+    expect(screen.queryByText('Фото этого объёма')).not.toBeInTheDocument()
   })
 })

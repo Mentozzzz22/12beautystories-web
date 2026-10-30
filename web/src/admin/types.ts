@@ -69,6 +69,7 @@ export interface Variant {
   compareAtPrice: number | null
   stock: number
   isActive: boolean
+  imageUrl: string
 }
 
 export type OptionKind = 'none' | 'volume' | 'color'

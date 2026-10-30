@@ -95,6 +95,7 @@ type Variant struct {
 	Price          int64  `json:"price"`
 	CompareAtPrice *int64 `json:"compareAtPrice,omitempty"`
 	InStock        bool   `json:"inStock"`
+	ImageURL       string `json:"imageUrl,omitempty"`
 }
 
 // Product is the full product page.

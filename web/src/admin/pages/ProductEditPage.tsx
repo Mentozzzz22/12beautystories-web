@@ -6,7 +6,7 @@ import { GalleryField } from '../components/ImageUpload'
 import { RichTextArea } from '../components/RichTextArea'
 import { fieldErrors } from '../errors'
 import { FormActions, Loading, NumberField, SelectField, TextField, Toggle } from '../components/ui'
-import type { OptionKind, Product, Variant } from '../types'
+import type { Media, OptionKind, Product, Variant } from '../types'
 
 const emptyVariant = (): Variant => ({
   id: 0,
@@ -16,6 +16,7 @@ const emptyVariant = (): Variant => ({
   compareAtPrice: null,
   stock: 0,
   isActive: true,
+  imageUrl: '',
 })
 
 const emptyProduct = (): Product => ({
@@ -46,6 +47,47 @@ export function ProductEditPage() {
   if (id > 0 && product.isPending) return <Loading />
   if (id > 0 && product.isError) return <p className="text-sm text-sale">Товар не найден</p>
   return <ProductForm key={id} initial={product.data ?? emptyProduct()} />
+}
+
+/** Picks which gallery photo opens with a variant; a second click on the photo clears the choice. */
+function VariantPhotoPicker({
+  label,
+  media,
+  value,
+  onChange,
+  error,
+}: {
+  label: string
+  media: Media[]
+  value: string
+  onChange: (url: string) => void
+  error?: string
+}) {
+  const images = media.filter((m) => m.kind === 'image')
+  if (images.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1.5 text-sm font-medium">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {images.map((m, i) => (
+          <button
+            key={m.url}
+            type="button"
+            aria-label={`${label}: фото ${i + 1}`}
+            aria-pressed={m.url === value}
+            onClick={() => onChange(m.url === value ? '' : m.url)}
+            className={`h-14 w-14 overflow-hidden rounded-lg border-2 ${
+              m.url === value ? 'border-ink' : 'border-line hover:border-muted'
+            }`}
+          >
+            <img src={m.url} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
+      {error && <p className="mt-1 text-xs text-sale">{error}</p>}
+    </div>
+  )
 }
 
 const OPTION_KINDS: { value: OptionKind; label: string; hint: string }[] = [
@@ -92,8 +134,19 @@ export function ProductForm({ initial }: { initial: Product }) {
     setP((cur) => ({
       ...cur,
       optionKind: kind,
-      // A single-option product keeps only its first variant.
-      variants: kind === 'none' ? cur.variants.slice(0, 1) : cur.variants,
+      // A single-option product keeps only its first variant, with nothing to switch photos.
+      variants:
+        kind === 'none' ? cur.variants.slice(0, 1).map((v) => ({ ...v, imageUrl: '' })) : cur.variants,
+    }))
+
+  const setMedia = (media: Media[]) =>
+    setP((cur) => ({
+      ...cur,
+      media,
+      // A variant must not keep pointing at a photo removed from the gallery.
+      variants: cur.variants.map((v) =>
+        media.some((m) => m.url === v.imageUrl) ? v : { ...v, imageUrl: '' },
+      ),
     }))
 
   const submit = (e: FormEvent) => {
@@ -175,7 +228,7 @@ export function ProductForm({ initial }: { initial: Product }) {
       </section>
 
       <section className="rounded-2xl bg-white p-5">
-        <GalleryField value={p.media} onChange={(m) => set('media', m)} error={errors.media} />
+        <GalleryField value={p.media} onChange={setMedia} error={errors.media} />
       </section>
 
       <section className="space-y-4 rounded-2xl bg-white p-5">
@@ -239,6 +292,15 @@ export function ProductForm({ initial }: { initial: Product }) {
                     error={err('stock')}
                   />
                 </div>
+                {multi && (
+                  <VariantPhotoPicker
+                    label={p.optionKind === 'color' ? 'Фото этого цвета' : 'Фото этого объёма'}
+                    media={p.media}
+                    value={v.imageUrl}
+                    onChange={(imageUrl) => setVariant(i, { imageUrl })}
+                    error={err('imageUrl')}
+                  />
+                )}
                 {multi && (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <Toggle

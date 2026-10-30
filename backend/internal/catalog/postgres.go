@@ -194,7 +194,7 @@ func (p *Postgres) Product(ctx context.Context, slug string) (Product, error) {
 	}
 
 	variantRows, err := p.db.Query(ctx, `
-		SELECT id, label, sku, price, compare_at_price, stock > 0
+		SELECT id, label, sku, price, compare_at_price, stock > 0, image_url
 		FROM product_variants
 		WHERE product_id = $1 AND is_active
 		ORDER BY sort, price, id`, pr.ID)

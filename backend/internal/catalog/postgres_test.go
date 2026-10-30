@@ -163,3 +163,17 @@ func TestProduct(t *testing.T) {
 		t.Errorf("Product(missing) error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestProductVariantImage(t *testing.T) {
+	pool := dbtest.New(t)
+	dbtest.Seed(t, pool)
+	dbtest.Exec(t, pool, `UPDATE product_variants SET image_url = '/uploads/250.jpg' WHERE label = '250 ml'`)
+
+	p, err := catalog.NewPostgres(pool).Product(context.Background(), "davines-energizing-shampoo")
+	if err != nil {
+		t.Fatalf("Product() error = %v", err)
+	}
+	if p.Variants[0].ImageURL != "" || p.Variants[1].ImageURL != "/uploads/250.jpg" {
+		t.Errorf("variants = %+v, want a photo only on 250 ml", p.Variants)
+	}
+}

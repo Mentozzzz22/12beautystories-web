@@ -23,13 +23,29 @@ const product: Product = {
   ],
 }
 
-function renderProduct() {
+const withVariantPhotos: Product = {
+  ...product,
+  media: [
+    { url: '/a.jpg', kind: 'image' },
+    { url: '/b.jpg', kind: 'image' },
+    { url: '/c.jpg', kind: 'image' },
+  ],
+  variants: [
+    { id: 10, label: '100 ml', sku: '', price: 9000, inStock: true, imageUrl: '/b.jpg' },
+    { id: 11, label: '250 ml', sku: '', price: 18000, inStock: true, imageUrl: '/c.jpg' },
+    { id: 12, label: '1000 ml', sku: '', price: 48000, inStock: true },
+  ],
+}
+
+function renderProduct(p = product) {
   return render(
     <MemoryRouter>
-      <ProductView product={product} />
+      <ProductView product={p} />
     </MemoryRouter>,
   )
 }
+
+const mainPhoto = () => screen.getByRole('img', { name: product.name })
 
 describe('ProductView', () => {
   beforeEach(() => cart.clear())
@@ -63,5 +79,38 @@ describe('ProductView', () => {
       expect.objectContaining({ variantId: 11, variantLabel: '250 ml', price: 18000, quantity: 1 }),
     ])
     expect(screen.getByRole('status')).toHaveTextContent('Товар добавлен в корзину')
+  })
+
+  it('opens the photo of the selected variant and keeps the current one without a photo', async () => {
+    const user = userEvent.setup()
+    renderProduct(withVariantPhotos)
+
+    expect(mainPhoto()).toHaveAttribute('src', '/b.jpg')
+    await user.click(screen.getByLabelText('250 ml'))
+    expect(mainPhoto()).toHaveAttribute('src', '/c.jpg')
+    await user.click(screen.getByLabelText('1000 ml'))
+    expect(mainPhoto()).toHaveAttribute('src', '/c.jpg')
+  })
+
+  it('still lets the customer browse the other photos', async () => {
+    const user = userEvent.setup()
+    renderProduct(withVariantPhotos)
+
+    await user.click(screen.getByRole('button', { name: 'Фото 1' }))
+    expect(mainPhoto()).toHaveAttribute('src', '/a.jpg')
+    expect(screen.getByLabelText('100 ml')).toBeChecked()
+  })
+
+  it('puts the photo of the selected variant into the cart', async () => {
+    const user = userEvent.setup()
+    renderProduct(withVariantPhotos)
+
+    await user.click(screen.getByLabelText('250 ml'))
+    await user.click(screen.getByRole('button', { name: 'Добавить в корзину' }))
+    expect(cart.getSnapshot().items[0]).toMatchObject({ imageUrl: '/c.jpg' })
+
+    await user.click(screen.getByLabelText('1000 ml'))
+    await user.click(screen.getByRole('button', { name: 'Добавить в корзину' }))
+    expect(cart.getSnapshot().items[1]).toMatchObject({ imageUrl: '/a.jpg' })
   })
 })

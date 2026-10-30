@@ -36,6 +36,7 @@ export function ProductView({ product }: { product: Product }) {
   const firstAvailable = product.variants.find((v) => v.inStock) ?? product.variants[0]
   const [variantId, setVariantId] = useState(firstAvailable?.id)
   const [added, setAdded] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState(firstAvailable?.imageUrl)
   const variant = product.variants.find((v) => v.id === variantId) ?? firstAvailable
 
   if (!variant) return null
@@ -48,7 +49,7 @@ export function ProductView({ product }: { product: Product }) {
       brandName: product.brand.name,
       variantLabel: variant.label,
       price: variant.price,
-      imageUrl: product.media.find((m) => m.kind === 'image')?.url ?? '',
+      imageUrl: variant.imageUrl || (product.media.find((m) => m.kind === 'image')?.url ?? ''),
     })
     setAdded(true)
   }
@@ -73,7 +74,12 @@ export function ProductView({ product }: { product: Product }) {
       </nav>
 
       <div className="mt-4 grid gap-8 md:grid-cols-2 md:gap-12">
-        <Gallery media={product.media} alt={product.name} />
+        <Gallery
+          media={product.media}
+          alt={product.name}
+          activeUrl={photoUrl}
+          onSelect={setPhotoUrl}
+        />
 
         <div>
           <p className="text-xs font-medium tracking-[0.14em] text-muted uppercase">
@@ -96,6 +102,8 @@ export function ProductView({ product }: { product: Product }) {
               onSelect={(id) => {
                 setVariantId(id)
                 setAdded(false)
+                const selected = product.variants.find((v) => v.id === id)
+                if (selected?.imageUrl) setPhotoUrl(selected.imageUrl)
               }}
             />
           )}
@@ -192,9 +200,15 @@ export function VariantPicker({ kind, variants, selectedId, onSelect }: VariantP
   )
 }
 
-function Gallery({ media, alt }: { media: Media[]; alt: string }) {
-  const [active, setActive] = useState(0)
-  const current = media[active]
+interface GalleryProps {
+  media: Media[]
+  alt: string
+  activeUrl?: string
+  onSelect: (url: string) => void
+}
+
+function Gallery({ media, alt, activeUrl, onSelect }: GalleryProps) {
+  const current = media.find((m) => m.url === activeUrl) ?? media[0]
 
   return (
     <div>
@@ -211,11 +225,11 @@ function Gallery({ media, alt }: { media: Media[]; alt: string }) {
             <button
               key={m.url}
               type="button"
-              onClick={() => setActive(i)}
+              onClick={() => onSelect(m.url)}
               aria-label={`Фото ${i + 1}`}
-              aria-current={i === active}
+              aria-current={m === current}
               className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 ${
-                i === active ? 'border-ink' : 'border-transparent'
+                m === current ? 'border-ink' : 'border-transparent'
               }`}
             >
               {m.kind === 'video' ? (

@@ -331,7 +331,7 @@ func getProduct(ctx context.Context, q querier, id int64) (Product, error) {
 	}
 
 	variantRows, err := q.Query(ctx, `
-		SELECT id, label, sku, price, compare_at_price, stock, is_active
+		SELECT id, label, sku, price, compare_at_price, stock, is_active, image_url
 		FROM product_variants WHERE product_id = $1 ORDER BY sort, id`, id)
 	if err != nil {
 		return Product{}, fmt.Errorf("query variants: %w", err)
@@ -441,18 +441,18 @@ func saveVariants(ctx context.Context, tx pgx.Tx, productID int64, variants []Va
 	for i, v := range variants {
 		if v.ID == 0 {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO product_variants (product_id, label, sku, price, compare_at_price, stock, sort, is_active)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-				productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive); err != nil {
+				INSERT INTO product_variants (product_id, label, sku, price, compare_at_price, stock, sort, is_active, image_url)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive, v.ImageURL); err != nil {
 				return fmt.Errorf("insert variant: %w", mapErr(err))
 			}
 			continue
 		}
 		err := affected(tx.Exec(ctx, `
 			UPDATE product_variants SET label = $3, sku = $4, price = $5, compare_at_price = $6, stock = $7,
-			       sort = $8, is_active = $9
+			       sort = $8, is_active = $9, image_url = $10
 			WHERE id = $1 AND product_id = $2`,
-			v.ID, productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive))
+			v.ID, productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive, v.ImageURL))
 		if errors.Is(err, apperr.ErrNotFound) {
 			return apperr.Field(fmt.Sprintf("variants.%d.id", i), apperr.Invalid)
 		}

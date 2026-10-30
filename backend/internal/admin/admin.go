@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -89,6 +90,7 @@ type Variant struct {
 	CompareAtPrice *int64 `json:"compareAtPrice"`
 	Stock          int    `json:"stock"`
 	IsActive       bool   `json:"isActive"`
+	ImageURL       string `json:"imageUrl"`
 }
 
 // Product is the full editable product. Saving replaces media and reconciles variants by ID.
@@ -428,10 +430,19 @@ func (p *Product) validate() (autoSlug bool, err error) {
 		if vr.Stock < 0 {
 			v.Add(prefix+"stock", apperr.Invalid)
 		}
+		if vr.ImageURL != "" && !p.hasImage(vr.ImageURL) {
+			v.Add(prefix+"imageUrl", apperr.Invalid)
+		}
 	}
 
 	autoSlug = v.slug(&p.Slug, p.Name)
 	return autoSlug, v.Err()
+}
+
+func (p *Product) hasImage(url string) bool {
+	return slices.ContainsFunc(p.Media, func(m Media) bool {
+		return m.Kind == "image" && m.URL == url
+	})
 }
 
 func (b *Banner) validate() error {

@@ -55,31 +55,33 @@ export function CatalogPage() {
         ))}
       </nav>
 
-      <div className="mt-3 flex items-center gap-5">
-        {heading.image && (
+      <div className="mt-3 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+        <div className="flex items-center gap-5">
+          {heading.image && (
+            <img
+              src={heading.image}
+              alt=""
+              className="h-20 w-20 shrink-0 rounded-2xl border border-line bg-white object-contain p-2 sm:h-28 sm:w-28"
+            />
+          )}
+          <div>
+            <h1 className="text-4xl sm:text-5xl">{heading.title}</h1>
+            {heading.description && (
+              <p className="mt-3 max-w-2xl text-sm whitespace-pre-line text-muted">
+                <RichText text={heading.description} />
+              </p>
+            )}
+          </div>
+        </div>
+
+        {heading.cover && (
           <img
-            src={heading.image}
-            alt=""
-            className="h-20 w-20 shrink-0 rounded-2xl border border-line bg-white object-contain p-2 sm:h-28 sm:w-28"
+            src={heading.cover}
+            alt={heading.title}
+            className="max-h-72 max-w-full self-center rounded-3xl lg:max-h-80 lg:max-w-[40%]"
           />
         )}
-        <div>
-          <h1 className="text-4xl sm:text-5xl">{heading.title}</h1>
-          {heading.description && (
-            <p className="mt-3 max-w-2xl text-sm whitespace-pre-line text-muted">
-              <RichText text={heading.description} />
-            </p>
-          )}
-        </div>
       </div>
-
-      {heading.cover && (
-        <img
-          src={heading.cover}
-          alt={heading.title}
-          className="mt-6 h-56 w-full rounded-3xl bg-white object-contain sm:h-80 lg:h-[26rem]"
-        />
-      )}
 
       {chips.length > 0 && (
         <div className="-mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">

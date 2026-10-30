@@ -112,7 +112,7 @@ func TestSaveProductCreateAndReconcileVariants(t *testing.T) {
 		IsActive:   true,
 		Media:      []admin.Media{{URL: "/uploads/a.jpg"}, {URL: "/uploads/b.jpg"}},
 		Variants: []admin.Variant{
-			{Label: "250 ml", Price: 17000, Stock: 3, IsActive: true},
+			{Label: "250 ml", Price: 17000, Stock: 3, IsActive: true, ImageURL: "/uploads/a.jpg"},
 			{Label: "1000 ml", Price: 45000, CompareAtPrice: ptr[int64](50000), Stock: 1, IsActive: true},
 		},
 	})
@@ -122,13 +122,16 @@ func TestSaveProductCreateAndReconcileVariants(t *testing.T) {
 	if created.Slug != "oi-shampoo" || len(created.Variants) != 2 || created.Media[0].Kind != "image" {
 		t.Fatalf("created = %+v", created)
 	}
+	if created.Variants[0].ImageURL != "/uploads/a.jpg" || created.Variants[1].ImageURL != "" {
+		t.Errorf("variant images = %+v", created.Variants)
+	}
 	keptID := created.Variants[0].ID
 
 	// Update: change the first variant, drop the second, add a new one, reorder photos.
 	created.Name = "OI Shampoo New"
 	created.Variants = []admin.Variant{
-		{ID: keptID, Label: "250 ml", Price: 18000, Stock: 5, IsActive: true},
-		{Label: "100 ml", Price: 9000, Stock: 2, IsActive: true},
+		{ID: keptID, Label: "250 ml", Price: 18000, Stock: 5, IsActive: true, ImageURL: "/uploads/b.jpg"},
+		{Label: "100 ml", Price: 9000, Stock: 2, IsActive: true, ImageURL: "/uploads/b.jpg"},
 	}
 	created.Media = []admin.Media{{URL: "/uploads/b.jpg"}}
 	updated, err := repo.SaveProduct(ctx, created)
@@ -144,6 +147,11 @@ func TestSaveProductCreateAndReconcileVariants(t *testing.T) {
 	if len(updated.Media) != 1 || updated.Media[0].URL != "/uploads/b.jpg" {
 		t.Errorf("media = %+v", updated.Media)
 	}
+	for _, v := range updated.Variants {
+		if v.ImageURL != "/uploads/b.jpg" {
+			t.Errorf("variant %q image = %q, want the chosen photo", v.Label, v.ImageURL)
+		}
+	}
 }
 
 func TestSaveProductValidation(t *testing.T) {
@@ -155,9 +163,16 @@ func TestSaveProductValidation(t *testing.T) {
 	}
 
 	_, err := repo.SaveProduct(ctx, admin.Product{
-		Variants: []admin.Variant{{Price: 100, CompareAtPrice: ptr[int64](50)}, {Price: -1}},
+		Media: []admin.Media{{URL: "/uploads/clip.mp4", Kind: "video"}},
+		Variants: []admin.Variant{
+			{Price: 100, CompareAtPrice: ptr[int64](50), ImageURL: "/uploads/other.jpg"},
+			{Price: -1, ImageURL: "/uploads/clip.mp4"},
+		},
 	})
-	for _, f := range []string{"name", "brandId", "variants.0.label", "variants.0.compareAtPrice", "variants.1.price"} {
+	for _, f := range []string{
+		"name", "brandId", "variants.0.label", "variants.0.compareAtPrice", "variants.0.imageUrl",
+		"variants.1.price", "variants.1.imageUrl",
+	} {
 		if fieldErr(t, err, f) == "" {
 			t.Errorf("missing error for %s", f)
 		}
