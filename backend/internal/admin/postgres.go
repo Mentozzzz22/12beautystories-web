@@ -66,7 +66,7 @@ func fkField(constraint string) string {
 	case strings.Contains(constraint, "line_id"):
 		return "lineId"
 	case strings.Contains(constraint, "category_id"):
-		return "categoryId"
+		return "categoryIds"
 	default:
 		return "id"
 	}
@@ -269,7 +269,10 @@ func (p *Postgres) Products(ctx context.Context, f ProductFilter) (ProductPage, 
 		pattern = "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
 	}
 	rows, err := p.db.Query(ctx, `
-		SELECT p.id, p.slug, p.name, b.name, COALESCE(l.name, ''), COALESCE(c.name, ''),
+		SELECT p.id, p.slug, p.name, b.name, COALESCE(l.name, ''),
+		       COALESCE((SELECT string_agg(c.name, ', ' ORDER BY c.sort, c.name)
+		                 FROM product_categories pc JOIN categories c ON c.id = pc.category_id
+		                 WHERE pc.product_id = p.id), ''),
 		       COALESCE((SELECT m.url FROM product_media m WHERE m.product_id = p.id AND m.kind = 'image'
 		                 ORDER BY m.sort, m.id LIMIT 1), ''),
 		       v.price_from, COALESCE(v.total_stock, 0)::int, v.variant_count::int, p.is_active,
@@ -277,7 +280,6 @@ func (p *Postgres) Products(ctx context.Context, f ProductFilter) (ProductPage, 
 		FROM products p
 		JOIN brands b ON b.id = p.brand_id
 		LEFT JOIN product_lines l ON l.id = p.line_id
-		LEFT JOIN categories c ON c.id = p.category_id
 		CROSS JOIN LATERAL (
 		    SELECT min(price) AS price_from, sum(stock) AS total_stock, count(*) AS variant_count
 		    FROM product_variants WHERE product_id = p.id
@@ -294,7 +296,7 @@ func (p *Postgres) Products(ctx context.Context, f ProductFilter) (ProductPage, 
 	res := ProductPage{Items: []ProductListItem{}, Page: page, PageSize: PageSize}
 	for rows.Next() {
 		var it ProductListItem
-		if err := rows.Scan(&it.ID, &it.Slug, &it.Name, &it.BrandName, &it.LineName, &it.CategoryName,
+		if err := rows.Scan(&it.ID, &it.Slug, &it.Name, &it.BrandName, &it.LineName, &it.CategoryNames,
 			&it.ImageURL, &it.PriceFrom, &it.TotalStock, &it.VariantCount, &it.IsActive, &res.Total); err != nil {
 			return ProductPage{}, fmt.Errorf("scan product: %w", err)
 		}
@@ -314,12 +316,24 @@ func (p *Postgres) Product(ctx context.Context, id int64) (Product, error) {
 func getProduct(ctx context.Context, q querier, id int64) (Product, error) {
 	var pr Product
 	err := q.QueryRow(ctx, `
-		SELECT id, slug, name, brand_id, line_id, category_id, description, ingredients, option_kind, sort, is_active
+		SELECT id, slug, name, brand_id, line_id, description, ingredients, option_kind, sort, is_active
 		FROM products WHERE id = $1`, id).
-		Scan(&pr.ID, &pr.Slug, &pr.Name, &pr.BrandID, &pr.LineID, &pr.CategoryID,
+		Scan(&pr.ID, &pr.Slug, &pr.Name, &pr.BrandID, &pr.LineID,
 			&pr.Description, &pr.Ingredients, &pr.OptionKind, &pr.Sort, &pr.IsActive)
 	if err != nil {
 		return Product{}, mapErr(err)
+	}
+
+	categoryRows, err := q.Query(ctx,
+		`SELECT category_id FROM product_categories WHERE product_id = $1 ORDER BY category_id`, id)
+	if err != nil {
+		return Product{}, fmt.Errorf("query categories: %w", err)
+	}
+	if pr.CategoryIDs, err = pgx.CollectRows(categoryRows, pgx.RowTo[int64]); err != nil {
+		return Product{}, fmt.Errorf("collect categories: %w", err)
+	}
+	if pr.CategoryIDs == nil {
+		pr.CategoryIDs = []int64{}
 	}
 
 	mediaRows, err := q.Query(ctx, `SELECT url, kind FROM product_media WHERE product_id = $1 ORDER BY sort, id`, id)
@@ -380,25 +394,34 @@ func (p *Postgres) SaveProduct(ctx context.Context, pr Product) (Product, error)
 
 	if pr.ID == 0 {
 		err = tx.QueryRow(ctx, `
-			INSERT INTO products (slug, name, brand_id, line_id, category_id, description, ingredients,
+			INSERT INTO products (slug, name, brand_id, line_id, description, ingredients,
 			                      option_kind, sort, is_active)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-			pr.Slug, pr.Name, pr.BrandID, pr.LineID, pr.CategoryID, pr.Description, pr.Ingredients,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+			pr.Slug, pr.Name, pr.BrandID, pr.LineID, pr.Description, pr.Ingredients,
 			pr.OptionKind, pr.Sort, pr.IsActive).Scan(&pr.ID)
 		if err != nil {
 			return Product{}, mapErr(err)
 		}
 	} else {
 		err = affected(tx.Exec(ctx, `
-			UPDATE products SET slug = $2, name = $3, brand_id = $4, line_id = $5, category_id = $6,
-			       description = $7, ingredients = $8, option_kind = $9, sort = $10, is_active = $11,
+			UPDATE products SET slug = $2, name = $3, brand_id = $4, line_id = $5,
+			       description = $6, ingredients = $7, option_kind = $8, sort = $9, is_active = $10,
 			       updated_at = now()
 			WHERE id = $1`,
-			pr.ID, pr.Slug, pr.Name, pr.BrandID, pr.LineID, pr.CategoryID, pr.Description, pr.Ingredients,
+			pr.ID, pr.Slug, pr.Name, pr.BrandID, pr.LineID, pr.Description, pr.Ingredients,
 			pr.OptionKind, pr.Sort, pr.IsActive))
 		if err != nil {
 			return Product{}, err
 		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM product_categories WHERE product_id = $1`, pr.ID); err != nil {
+		return Product{}, fmt.Errorf("clear categories: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO product_categories (product_id, category_id)
+		SELECT $1::bigint, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, pr.ID, pr.CategoryIDs); err != nil {
+		return Product{}, mapErr(err)
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM product_media WHERE product_id = $1`, pr.ID); err != nil {

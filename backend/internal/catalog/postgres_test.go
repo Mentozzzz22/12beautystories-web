@@ -145,7 +145,7 @@ func TestProduct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Product() error = %v", err)
 	}
-	if p.OptionKind != catalog.OptionVolume || p.Category == nil || p.Category.Slug != "shampoo" {
+	if p.OptionKind != catalog.OptionVolume {
 		t.Errorf("product = %+v", p)
 	}
 	if len(p.Variants) != 3 || p.Variants[0].Label != "100 ml" {
@@ -161,6 +161,40 @@ func TestProduct(t *testing.T) {
 
 	if _, err := repo.Product(context.Background(), "missing"); !errors.Is(err, catalog.ErrNotFound) {
 		t.Errorf("Product(missing) error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestProductsInSeveralCategories(t *testing.T) {
+	pool := dbtest.New(t)
+	dbtest.Seed(t, pool)
+	dbtest.Exec(t, pool, `
+		INSERT INTO product_categories (product_id, category_id)
+		SELECT p.id, c.id FROM products p, categories c
+		WHERE p.slug = 'davines-minu-shampoo' AND c.slug = 'leave-in'`)
+	repo := catalog.NewPostgres(pool)
+
+	for _, category := range []string{"shampoo", "leave-in"} {
+		page, err := repo.Products(context.Background(), catalog.Filter{Category: category})
+		if err != nil {
+			t.Fatalf("Products(%s) error = %v", category, err)
+		}
+		found := 0
+		for _, it := range page.Items {
+			if it.Slug == "davines-minu-shampoo" {
+				found++
+			}
+		}
+		if found != 1 {
+			t.Errorf("%s lists the product %d times, want once", category, found)
+		}
+	}
+
+	all, err := repo.Products(context.Background(), catalog.Filter{})
+	if err != nil {
+		t.Fatalf("Products() error = %v", err)
+	}
+	if all.Total != 4 {
+		t.Errorf("unfiltered total = %d, want 4 without duplicates", all.Total)
 	}
 }
 

@@ -6,7 +6,7 @@ import { GalleryField } from '../components/ImageUpload'
 import { RichTextArea } from '../components/RichTextArea'
 import { fieldErrors } from '../errors'
 import { FormActions, Loading, NumberField, SelectField, TextField, Toggle } from '../components/ui'
-import type { Media, OptionKind, Product, Variant } from '../types'
+import type { Category, Media, OptionKind, Product, Variant } from '../types'
 
 const emptyVariant = (): Variant => ({
   id: 0,
@@ -25,7 +25,7 @@ const emptyProduct = (): Product => ({
   name: '',
   brandId: 0,
   lineId: null,
-  categoryId: null,
+  categoryIds: [],
   description: '',
   ingredients: '',
   optionKind: 'none',
@@ -47,6 +47,56 @@ export function ProductEditPage() {
   if (id > 0 && product.isPending) return <Loading />
   if (id > 0 && product.isError) return <p className="text-sm text-sale">Товар не найден</p>
   return <ProductForm key={id} initial={product.data ?? emptyProduct()} />
+}
+
+function CategoryPicker({
+  categories,
+  value,
+  onChange,
+  error,
+}: {
+  categories: Category[]
+  value: number[]
+  onChange: (ids: number[]) => void
+  error?: string
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-1.5 text-sm font-medium">Категории</legend>
+      {categories.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {categories.map((c) => {
+            const checked = value.includes(c.id)
+            return (
+              <label
+                key={c.id}
+                className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm has-focus-visible:ring-2 has-focus-visible:ring-accent ${
+                  checked ? 'border-ink bg-ink text-cream' : 'border-line hover:border-ink'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={checked}
+                  onChange={() =>
+                    onChange(checked ? value.filter((id) => id !== c.id) : [...value, c.id])
+                  }
+                />
+                {c.name}
+              </label>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">Категорий пока нет</p>
+      )}
+      {error ? (
+        <p className="mt-1 text-xs text-sale">{error}</p>
+      ) : (
+        categories.length > 0 && <p className="mt-1 text-xs text-muted">Можно выбрать несколько</p>
+      )}
+    </fieldset>
+  )
 }
 
 /** Picks which gallery photo opens with a variant; a second click on the photo clears the choice. */
@@ -136,7 +186,9 @@ export function ProductForm({ initial }: { initial: Product }) {
       optionKind: kind,
       // A single-option product keeps only its first variant, with nothing to switch photos.
       variants:
-        kind === 'none' ? cur.variants.slice(0, 1).map((v) => ({ ...v, imageUrl: '' })) : cur.variants,
+        kind === 'none'
+          ? cur.variants.slice(0, 1).map((v) => ({ ...v, imageUrl: '' }))
+          : cur.variants,
     }))
 
   const setMedia = (media: Media[]) =>
@@ -185,7 +237,7 @@ export function ProductForm({ initial }: { initial: Product }) {
           onChange={(v) => set('name', v)}
           error={errors.name}
         />
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <SelectField
             label="Бренд"
             value={p.brandId || null}
@@ -202,15 +254,14 @@ export function ProductForm({ initial }: { initial: Product }) {
             empty={lines.length ? 'Без линии' : 'У бренда нет линий'}
             error={errors.lineId}
           />
-          <SelectField
-            label="Категория"
-            value={p.categoryId}
-            onChange={(v) => set('categoryId', v)}
-            options={categories.map((c) => ({ value: c.id, label: c.name }))}
-            empty="Без категории"
-            error={errors.categoryId}
-          />
         </div>
+        <CategoryPicker
+          categories={categories}
+          value={p.categoryIds}
+          onChange={(ids) => set('categoryIds', ids)}
+          error={errors.categoryIds}
+        />
+
         <RichTextArea
           label="Описание"
           value={p.description}

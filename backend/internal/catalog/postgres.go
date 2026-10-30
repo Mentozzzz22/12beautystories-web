@@ -115,7 +115,6 @@ func (p *Postgres) Products(ctx context.Context, f Filter) (Page, error) {
 		FROM products p
 		JOIN brands b ON b.id = p.brand_id AND b.is_active
 		LEFT JOIN product_lines l ON l.id = p.line_id
-		LEFT JOIN categories c ON c.id = p.category_id
 		JOIN LATERAL (
 		    SELECT (array_agg(pv.price ORDER BY pv.price, pv.id))[1] AS price,
 		           (array_agg(pv.compare_at_price ORDER BY pv.price, pv.id))[1] AS compare_at_price,
@@ -128,7 +127,10 @@ func (p *Postgres) Products(ctx context.Context, f Filter) (Page, error) {
 		WHERE p.is_active
 		  AND ($1 = '' OR b.slug = $1)
 		  AND ($2 = '' OR l.slug = $2)
-		  AND ($3 = '' OR c.slug = $3)
+		  AND ($3 = '' OR EXISTS (
+		      SELECT 1 FROM product_categories pc
+		      JOIN categories c ON c.id = pc.category_id
+		      WHERE pc.product_id = p.id AND c.slug = $3))
 		  AND ($4 = '' OR p.name ILIKE $4 OR b.name ILIKE $4 OR l.name ILIKE $4)
 		ORDER BY p.sort, p.created_at DESC, p.id DESC
 		LIMIT $5 OFFSET $6`,
@@ -160,20 +162,18 @@ func (p *Postgres) Products(ctx context.Context, f Filter) (Page, error) {
 // Product returns the full product page by slug.
 func (p *Postgres) Product(ctx context.Context, slug string) (Product, error) {
 	var (
-		pr                         Product
-		lineSlug, lineName         *string
-		categorySlug, categoryName *string
+		pr                 Product
+		lineSlug, lineName *string
 	)
 	err := p.db.QueryRow(ctx, `
-		SELECT p.id, p.slug, p.name, b.slug, b.name, l.slug, l.name, c.slug, c.name,
+		SELECT p.id, p.slug, p.name, b.slug, b.name, l.slug, l.name,
 		       p.description, p.ingredients, p.option_kind
 		FROM products p
 		JOIN brands b ON b.id = p.brand_id AND b.is_active
 		LEFT JOIN product_lines l ON l.id = p.line_id
-		LEFT JOIN categories c ON c.id = p.category_id
 		WHERE p.slug = $1 AND p.is_active`, slug).
 		Scan(&pr.ID, &pr.Slug, &pr.Name, &pr.Brand.Slug, &pr.Brand.Name, &lineSlug, &lineName,
-			&categorySlug, &categoryName, &pr.Description, &pr.Ingredients, &pr.OptionKind)
+			&pr.Description, &pr.Ingredients, &pr.OptionKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Product{}, ErrNotFound
 	}
@@ -181,7 +181,6 @@ func (p *Postgres) Product(ctx context.Context, slug string) (Product, error) {
 		return Product{}, fmt.Errorf("query product: %w", err)
 	}
 	pr.Line = optionalRef(lineSlug, lineName)
-	pr.Category = optionalRef(categorySlug, categoryName)
 
 	mediaRows, err := p.db.Query(ctx,
 		`SELECT url, kind FROM product_media WHERE product_id = $1 ORDER BY sort, id`, pr.ID)

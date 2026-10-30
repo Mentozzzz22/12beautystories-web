@@ -22,21 +22,32 @@ INSERT INTO categories (slug, name, sort) VALUES
     ('cream', 'Кремы', 4),
     ('accessories', 'Аксессуары', 5);
 
-INSERT INTO products (slug, brand_id, line_id, category_id, name, description, ingredients, option_kind)
-SELECT p.slug, b.id, l.id, c.id, p.name, p.description, p.ingredients, p.option_kind
+INSERT INTO products (slug, brand_id, line_id, name, description, ingredients, option_kind)
+SELECT p.slug, b.id, l.id, p.name, p.description, p.ingredients, p.option_kind
 FROM (VALUES
-    ('davines-energizing-shampoo', 'davines', 'energizing', 'shampoo', 'Energizing Shampoo',
+    (1, 'davines-energizing-shampoo', 'davines', 'energizing', 'Energizing Shampoo',
      'Энергетический шампунь для истончённых и склонных к выпадению волос.', 'Кофеин, ниацинамид', 'volume'),
-    ('davines-minu-shampoo', 'davines', 'minu', 'shampoo', 'MINU Shampoo',
+    (2, 'davines-minu-shampoo', 'davines', 'minu', 'MINU Shampoo',
      'Шампунь для защиты цвета окрашенных волос.', 'Экстракт каперсов', 'volume'),
-    ('payot-hydra-24-cream', 'payot', 'hydra-24', 'cream', 'Hydra 24+ Crème Glacée',
+    (3, 'payot-hydra-24-cream', 'payot', 'hydra-24', 'Hydra 24+ Crème Glacée',
      'Увлажняющий крем-гель для обезвоженной кожи.', 'Гиалуроновая кислота', 'none'),
-    ('davines-paddle-brush', 'davines', NULL, 'accessories', 'Paddle Brush',
+    (4, 'davines-paddle-brush', 'davines', NULL, 'Paddle Brush',
      'Массажная расчёска.', '', 'color')
-) AS p(slug, brand, line, category, name, description, ingredients, option_kind)
+) AS p(ord, slug, brand, line, name, description, ingredients, option_kind)
 JOIN brands b ON b.slug = p.brand
 LEFT JOIN product_lines l ON l.brand_id = b.id AND l.slug = p.line
-LEFT JOIN categories c ON c.slug = p.category;
+ORDER BY p.ord;
+
+INSERT INTO product_categories (product_id, category_id)
+SELECT p.id, c.id
+FROM (VALUES
+    ('davines-energizing-shampoo', 'shampoo'),
+    ('davines-minu-shampoo', 'shampoo'),
+    ('payot-hydra-24-cream', 'cream'),
+    ('davines-paddle-brush', 'accessories')
+) AS pc(product, category)
+JOIN products p ON p.slug = pc.product
+JOIN categories c ON c.slug = pc.category;
 
 INSERT INTO product_variants (product_id, label, price, compare_at_price, stock, sort)
 SELECT p.id, v.label, v.price, v.compare_at, v.stock, v.sort

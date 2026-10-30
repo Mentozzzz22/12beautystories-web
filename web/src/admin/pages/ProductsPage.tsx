@@ -92,7 +92,7 @@ export function ProductsPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{p.name}</span>
                   <span className="block truncate text-xs text-muted">
-                    {[p.brandName, p.lineName, p.categoryName].filter(Boolean).join(' · ')}
+                    {[p.brandName, p.lineName, p.categoryNames].filter(Boolean).join(' · ')}
                   </span>
                 </span>
                 <span className="hidden text-right text-sm sm:block">

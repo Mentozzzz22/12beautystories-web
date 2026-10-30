@@ -47,17 +47,17 @@ type Category struct {
 
 // ProductListItem is a row in the admin product table.
 type ProductListItem struct {
-	ID           int64  `json:"id"`
-	Slug         string `json:"slug"`
-	Name         string `json:"name"`
-	BrandName    string `json:"brandName"`
-	LineName     string `json:"lineName"`
-	CategoryName string `json:"categoryName"`
-	ImageURL     string `json:"imageUrl"`
-	PriceFrom    *int64 `json:"priceFrom"`
-	TotalStock   int    `json:"totalStock"`
-	VariantCount int    `json:"variantCount"`
-	IsActive     bool   `json:"isActive"`
+	ID            int64  `json:"id"`
+	Slug          string `json:"slug"`
+	Name          string `json:"name"`
+	BrandName     string `json:"brandName"`
+	LineName      string `json:"lineName"`
+	CategoryNames string `json:"categoryNames"`
+	ImageURL      string `json:"imageUrl"`
+	PriceFrom     *int64 `json:"priceFrom"`
+	TotalStock    int    `json:"totalStock"`
+	VariantCount  int    `json:"variantCount"`
+	IsActive      bool   `json:"isActive"`
 }
 
 // ProductFilter narrows the admin product list.
@@ -100,7 +100,7 @@ type Product struct {
 	Name        string    `json:"name"`
 	BrandID     int64     `json:"brandId"`
 	LineID      *int64    `json:"lineId"`
-	CategoryID  *int64    `json:"categoryId"`
+	CategoryIDs []int64   `json:"categoryIds"`
 	Description string    `json:"description"`
 	Ingredients string    `json:"ingredients"`
 	OptionKind  string    `json:"optionKind"`

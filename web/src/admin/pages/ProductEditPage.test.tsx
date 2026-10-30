@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Brand, Product } from '../types'
+import type { Brand, Category, Product } from '../types'
 import { ProductForm } from './ProductEditPage'
 
 const brands: Brand[] = [
@@ -40,13 +40,18 @@ const brands: Brand[] = [
   },
 ]
 
+const categories: Category[] = [
+  { id: 3, slug: 'leave-in', name: 'Несмываемые', sort: 0, isActive: true },
+  { id: 4, slug: 'oils', name: 'Масла', sort: 1, isActive: true },
+]
+
 const product: Product = {
   id: 0,
   slug: '',
   name: '',
   brandId: 0,
   lineId: null,
-  categoryId: null,
+  categoryIds: [],
   description: '',
   ingredients: '',
   optionKind: 'none',
@@ -86,7 +91,7 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/admin/brands') return Response.json(brands)
-      if (url === '/api/admin/categories') return Response.json([])
+      if (url === '/api/admin/categories') return Response.json(categories)
       if (url === '/api/admin/products' && init?.method === 'POST') {
         saved = JSON.parse(String(init.body))
         return Response.json({ ...(saved as Product), id: 42 }, { status: 201 })
@@ -172,8 +177,7 @@ describe('ProductForm', () => {
     expect(screen.getAllByLabelText('Цена')).toHaveLength(1)
   })
 
-  const photo = (n: number) =>
-    screen.getByRole('button', { name: `Фото этого объёма: фото ${n}` })
+  const photo = (n: number) => screen.getByRole('button', { name: `Фото этого объёма: фото ${n}` })
 
   it('saves the photo chosen for a variant and clears it on a second click', async () => {
     const user = userEvent.setup()
@@ -202,6 +206,21 @@ describe('ProductForm', () => {
     await screen.findByText('Сохранено')
 
     expect(saved).toMatchObject({ variants: [{ imageUrl: '' }] })
+  })
+
+  it('saves several categories and removes one on a second click', async () => {
+    const user = userEvent.setup()
+    renderForm(withPhotos)
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Несмываемые' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Масла' }))
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await screen.findByText('Сохранено')
+    expect(saved).toMatchObject({ categoryIds: [3, 4] })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Несмываемые' }))
+    expect(screen.getByRole('checkbox', { name: 'Несмываемые' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Масла' })).toBeChecked()
   })
 
   it('offers no variant photos for a single-option product', async () => {

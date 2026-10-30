@@ -85,7 +85,6 @@ export interface Product {
   name: string
   brand: Ref
   line?: Ref
-  category?: Ref
   description: string
   ingredients: string
   optionKind: OptionKind

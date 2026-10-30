@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -151,6 +152,54 @@ func TestSaveProductCreateAndReconcileVariants(t *testing.T) {
 		if v.ImageURL != "/uploads/b.jpg" {
 			t.Errorf("variant %q image = %q, want the chosen photo", v.Label, v.ImageURL)
 		}
+	}
+}
+
+func TestSaveProductCategories(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+	category := func(slug string) int64 {
+		var id int64
+		if err := pool.QueryRow(ctx, `SELECT id FROM categories WHERE slug = $1`, slug).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	shampoo, leaveIn, cream := category("shampoo"), category("leave-in"), category("cream")
+
+	saved, err := repo.SaveProduct(ctx, admin.Product{
+		Name:        "OI Oil",
+		BrandID:     brandID(t, pool, "davines"),
+		CategoryIDs: []int64{leaveIn, shampoo, leaveIn},
+		Variants:    []admin.Variant{{Price: 100, IsActive: true}},
+	})
+	if err != nil {
+		t.Fatalf("SaveProduct(create) error = %v", err)
+	}
+	if !slices.Equal(saved.CategoryIDs, []int64{shampoo, leaveIn}) {
+		t.Errorf("categories = %v, want %v without duplicates", saved.CategoryIDs, []int64{shampoo, leaveIn})
+	}
+
+	saved.CategoryIDs = []int64{cream}
+	if saved, err = repo.SaveProduct(ctx, saved); err != nil {
+		t.Fatalf("SaveProduct(update) error = %v", err)
+	}
+	if !slices.Equal(saved.CategoryIDs, []int64{cream}) {
+		t.Errorf("categories = %v, want only %d", saved.CategoryIDs, cream)
+	}
+
+	saved.CategoryIDs = nil
+	if saved, err = repo.SaveProduct(ctx, saved); err != nil {
+		t.Fatalf("SaveProduct(clear) error = %v", err)
+	}
+	if saved.CategoryIDs == nil || len(saved.CategoryIDs) != 0 {
+		t.Errorf("categories = %#v, want an empty list", saved.CategoryIDs)
+	}
+
+	saved.CategoryIDs = []int64{999_999}
+	_, err = repo.SaveProduct(ctx, saved)
+	if got := fieldErr(t, err, "categoryIds"); got != apperr.Invalid {
+		t.Errorf("unknown category error = %q, want invalid", got)
 	}
 }
 

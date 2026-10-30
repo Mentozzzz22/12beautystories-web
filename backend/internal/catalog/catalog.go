@@ -105,7 +105,6 @@ type Product struct {
 	Name        string     `json:"name"`
 	Brand       Ref        `json:"brand"`
 	Line        *Ref       `json:"line,omitempty"`
-	Category    *Ref       `json:"category,omitempty"`
 	Description string     `json:"description"`
 	Ingredients string     `json:"ingredients"`
 	OptionKind  OptionKind `json:"optionKind"`

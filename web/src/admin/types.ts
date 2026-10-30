@@ -41,7 +41,7 @@ export interface ProductListItem {
   name: string
   brandName: string
   lineName: string
-  categoryName: string
+  categoryNames: string
   imageUrl: string
   priceFrom: number | null
   totalStock: number
@@ -80,7 +80,7 @@ export interface Product {
   name: string
   brandId: number
   lineId: number | null
-  categoryId: number | null
+  categoryIds: number[]
   description: string
   ingredients: string
   optionKind: OptionKind
