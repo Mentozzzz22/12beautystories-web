@@ -85,6 +85,7 @@ func run(log *slog.Logger) error {
 		if err != nil {
 			return err
 		}
+		fe.NoIndex = cfg.NoIndex
 		web = fe
 	}
 

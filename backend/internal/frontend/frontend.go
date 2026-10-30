@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -47,6 +48,9 @@ type Handler struct {
 	files     http.Handler
 	src       Source
 	log       *slog.Logger
+
+	// NoIndex hides the whole site from search engines, e.g. on a demo deployment.
+	NoIndex bool
 }
 
 // New loads index.html from dir. publicURL is the absolute site origin, e.g. https://12-beautystories.com.
@@ -212,7 +216,7 @@ func (h *Handler) render(m Meta) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<title>%s</title>\n", e(m.Title))
 	fmt.Fprintf(&b, "    <meta name=\"description\" content=\"%s\" />\n", e(m.Description))
-	if m.NoIndex {
+	if m.NoIndex || h.NoIndex {
 		b.WriteString("    <meta name=\"robots\" content=\"noindex\" />\n")
 	} else {
 		fmt.Fprintf(&b, "    <link rel=\"canonical\" href=\"%s\" />\n", e(h.absolute(m.Path)))
@@ -243,6 +247,10 @@ func (h *Handler) absolute(p string) string {
 
 func (h *Handler) robots(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if h.NoIndex {
+		_, _ = io.WriteString(w, "User-agent: *\nDisallow: /\n")
+		return
+	}
 	_, _ = fmt.Fprintf(w, "User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\n\nSitemap: %s/sitemap.xml\n", h.publicURL)
 }
 

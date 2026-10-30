@@ -23,6 +23,8 @@ type Config struct {
 	StaticDir string
 	// PublicURL is the site origin used in canonical links, Open Graph tags and the sitemap.
 	PublicURL string
+	// NoIndex hides the site from search engines; set it on demo deployments.
+	NoIndex bool
 }
 
 // Load reads the configuration. DATABASE_URL is required.
@@ -37,6 +39,7 @@ func Load() (Config, error) {
 		TrustProxy:       getbool("TRUST_PROXY"),
 		StaticDir:        os.Getenv("STATIC_DIR"),
 		PublicURL:        getenv("PUBLIC_URL", "http://localhost:8080"),
+		NoIndex:          getbool("NOINDEX"),
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

@@ -171,6 +171,19 @@ func TestSitemapAndRobots(t *testing.T) {
 	}
 }
 
+func TestNoIndexHidesSite(t *testing.T) {
+	h := newHandler(t)
+	h.NoIndex = true
+
+	if robots := get(t, h, "/robots.txt").Body.String(); robots != "User-agent: *\nDisallow: /\n" {
+		t.Errorf("robots.txt = %q", robots)
+	}
+	page := get(t, h, "/products/oi-oil").Body.String()
+	if !strings.Contains(page, `content="noindex"`) || strings.Contains(page, `rel="canonical"`) {
+		t.Errorf("product page must be noindex without canonical:\n%s", page)
+	}
+}
+
 func TestNewRequiresMarkers(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html></html>"), 0o644)

@@ -98,6 +98,28 @@ docker run --rm -v shop_uploads:/uploads -v "$PWD/backups:/backups" alpine \
 docker compose -f docker-compose.prod.yml start app
 ```
 
+## Demo on Render (free)
+
+[`render.yaml`](../render.yaml) deploys a preview of the shop to Render's free tier for feedback before
+the VPS is ready. It builds the same Dockerfile and creates a free Postgres. Limits: the app sleeps after
+15 minutes idle (the first request takes about a minute), uploaded photos are lost on restart, the
+database expires after 30 days. `NOINDEX=true` keeps the demo out of search results.
+
+1. Render dashboard → **New → Blueprint** → connect the GitHub repository. Enter `PUBLIC_URL` as
+   `https://beauty-stories-demo.onrender.com` (the service URL shown by Render).
+2. After the first deploy (migrations run on start), copy the database **External Database URL** and
+   load the demo catalog through the local Postgres container:
+
+   ```bash
+   docker compose cp backend/db/seed.sql db:/tmp/seed.sql
+   docker compose exec db psql "<external database url>" -f /tmp/seed.sql
+   ```
+
+3. Create the admin account from `backend/` with `DATABASE_URL` set to the external URL and
+   `ADMIN_PASSWORD` in the environment: `go run ./cmd/admin create -email owner@example.com`.
+
+Telegram variables can be added in the service settings; without them orders are only saved.
+
 ## Logs
 
 ```bash
