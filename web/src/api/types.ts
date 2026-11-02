@@ -107,9 +107,15 @@ export interface CartItemInput {
 }
 
 export interface Discount {
-  source: 'rule' | 'promo'
+  source: 'rule' | 'promo' | 'bundle'
   label: string
   amount: number
+}
+
+export interface BundleHint {
+  line: string
+  item: string
+  percent: number
 }
 
 export type PromoStatus = 'applied' | 'min_subtotal_not_met' | 'not_better'
@@ -120,6 +126,7 @@ export interface Quote {
   discountTotal: number
   total: number
   promoStatus?: PromoStatus
+  bundleHints?: BundleHint[]
 }
 
 export interface OrderLine {

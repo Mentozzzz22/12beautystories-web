@@ -153,6 +153,43 @@ type Rule struct {
 	EndsAt      *time.Time `json:"endsAt"`
 }
 
+// BundleOffer is an editable discount for sets of products from one product line.
+type BundleOffer struct {
+	ID       int64         `json:"id"`
+	Name     string        `json:"name"`
+	IsActive bool          `json:"isActive"`
+	StartsAt *time.Time    `json:"startsAt"`
+	EndsAt   *time.Time    `json:"endsAt"`
+	Groups   []BundleGroup `json:"groups"`
+	Tiers    []BundleTier  `json:"tiers"`
+}
+
+// BundleGroup is a role in a set, e.g. "шампунь", and the products that can fill it.
+type BundleGroup struct {
+	Name       string  `json:"name"`
+	ProductIDs []int64 `json:"productIds"`
+}
+
+// BundleTier is a set of slots that earns Percent off its items.
+type BundleTier struct {
+	Percent int64        `json:"percent"`
+	Slots   []BundleSlot `json:"slots"`
+}
+
+// BundleSlot requires an item of the group at index Group. An empty Label accepts any variant.
+type BundleSlot struct {
+	Group int    `json:"group"`
+	Label string `json:"label"`
+}
+
+// BundleOption is a product the owner can add to a group, with its existing variant labels.
+type BundleOption struct {
+	ID       int64    `json:"id"`
+	Name     string   `json:"name"`
+	LineName string   `json:"lineName"`
+	Labels   []string `json:"labels"`
+}
+
 // Order statuses in their usual sequence.
 const (
 	StatusNew             = "new"
@@ -191,16 +228,25 @@ type OrderItem struct {
 	LineTotal    int64  `json:"lineTotal"`
 }
 
+// OrderDiscount is a discount applied to a placed order.
+type OrderDiscount struct {
+	Source string `json:"source"`
+	Label  string `json:"label"`
+	Amount int64  `json:"amount"`
+}
+
 // Order is the full order card.
 type Order struct {
 	OrderListItem
-	CustomerID    int64       `json:"customerId"`
-	Address       string      `json:"address"`
-	Comment       string      `json:"comment"`
-	PromoCode     string      `json:"promoCode"`
-	Subtotal      int64       `json:"subtotal"`
-	DiscountTotal int64       `json:"discountTotal"`
-	Items         []OrderItem `json:"items"`
+	CustomerID    int64  `json:"customerId"`
+	Address       string `json:"address"`
+	Comment       string `json:"comment"`
+	PromoCode     string `json:"promoCode"`
+	Subtotal      int64  `json:"subtotal"`
+	DiscountTotal int64  `json:"discountTotal"`
+	// Discounts is empty for orders placed before discount names were stored.
+	Discounts []OrderDiscount `json:"discounts"`
+	Items     []OrderItem     `json:"items"`
 }
 
 // OrderFilter narrows the order list.
@@ -482,6 +528,43 @@ func (c *CustomerUpdate) validate() error {
 	v := newValidator()
 	v.text("name", &c.Name, true, maxName)
 	v.text("note", &c.Note, false, maxText)
+	return v.Err()
+}
+
+func (o *BundleOffer) validate() error {
+	v := newValidator()
+	v.text("name", &o.Name, true, maxName)
+	v.period(o.StartsAt, o.EndsAt)
+
+	if len(o.Groups) == 0 {
+		v.Add("groups", apperr.Required)
+	}
+	for i := range o.Groups {
+		g := &o.Groups[i]
+		v.text("groups", &g.Name, true, maxName)
+		if len(g.ProductIDs) == 0 {
+			v.Add("groups", apperr.Required)
+		}
+	}
+
+	if len(o.Tiers) == 0 {
+		v.Add("tiers", apperr.Required)
+	}
+	for i := range o.Tiers {
+		t := &o.Tiers[i]
+		if t.Percent < 1 || t.Percent > 100 || len(t.Slots) == 0 {
+			v.Add("tiers", apperr.Invalid)
+		}
+		seen := make(map[int]bool, len(t.Slots))
+		for j := range t.Slots {
+			s := &t.Slots[j]
+			s.Label = strings.TrimSpace(s.Label)
+			if s.Group < 0 || s.Group >= len(o.Groups) || seen[s.Group] {
+				v.Add("tiers", apperr.Invalid)
+			}
+			seen[s.Group] = true
+		}
+	}
 	return v.Err()
 }
 

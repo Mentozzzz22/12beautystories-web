@@ -38,6 +38,10 @@ type Variant struct {
 	Label       string
 	Price       int64
 	Stock       int
+	ProductID   int64
+	LineID      int64 // 0 when the product has no line
+	LineName    string
+	OnSale      bool
 }
 
 // DeliveryMethod is how the customer receives the order.
@@ -93,6 +97,7 @@ func Number(id int64) string {
 type Store interface {
 	Variants(ctx context.Context, ids []int64) (map[int64]Variant, error)
 	ActiveRules(ctx context.Context) ([]pricing.Rule, error)
+	ActiveBundles(ctx context.Context) ([]pricing.BundleTier, error)
 	// Promo returns nil, nil when the code does not exist, is inactive, expired or used up.
 	Promo(ctx context.Context, code string) (*pricing.Promo, error)
 	// Create persists the order, decrements stock and counts promo usage atomically.
@@ -174,7 +179,11 @@ func (s *Service) price(ctx context.Context, items []Item, promoCode string, che
 	if err != nil {
 		return QuoteResult{}, fmt.Errorf("load rules: %w", err)
 	}
-	return QuoteResult{Lines: lines, Quote: pricing.Calculate(priced, rules, promo)}, nil
+	bundles, err := s.store.ActiveBundles(ctx)
+	if err != nil {
+		return QuoteResult{}, fmt.Errorf("load bundles: %w", err)
+	}
+	return QuoteResult{Lines: lines, Quote: pricing.Calculate(priced, rules, bundles, promo)}, nil
 }
 
 func (s *Service) promo(ctx context.Context, code string) (*pricing.Promo, error) {
@@ -230,7 +239,10 @@ func (s *Service) priceLines(ctx context.Context, items []Item, checkStock bool)
 			VariantID: id, ProductName: v.ProductName, VariantLabel: v.Label,
 			UnitPrice: v.Price, Quantity: q, LineTotal: v.Price * int64(q),
 		})
-		priced = append(priced, pricing.Line{VariantID: id, BrandID: v.BrandID, UnitPrice: v.Price, Quantity: q})
+		priced = append(priced, pricing.Line{
+			VariantID: id, BrandID: v.BrandID, UnitPrice: v.Price, Quantity: q,
+			ProductID: v.ProductID, LineID: v.LineID, LineName: v.LineName, Label: v.Label, OnSale: v.OnSale,
+		})
 	}
 	return lines, priced, nil
 }

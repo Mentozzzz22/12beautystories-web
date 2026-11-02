@@ -4,6 +4,8 @@ import type {
   AdminUser,
   Banner,
   Brand,
+  BundleOffer,
+  BundleOption,
   Category,
   Customer,
   CustomerFilter,
@@ -121,3 +123,11 @@ export const useCategories = () => useResource<Category>('categories')
 export const useBanners = () => useResource<Banner>('banners')
 export const usePromos = () => useResource<Promo>('promos')
 export const useRules = () => useResource<Rule>('rules')
+export const useBundles = () => useResource<BundleOffer>('bundles')
+
+export function useBundleOptions() {
+  return useQuery({
+    queryKey: ['admin', 'bundle-options'],
+    queryFn: () => request<BundleOption[]>(`${BASE}/bundle-options`),
+  })
+}

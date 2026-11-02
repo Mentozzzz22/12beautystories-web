@@ -96,7 +96,16 @@ export function OrderDetailPage() {
                 <dt className="text-muted">Сумма</dt>
                 <dd>{formatTenge(o.subtotal)}</dd>
               </div>
-              {o.discountTotal > 0 && (
+              {o.discounts.map((d) => (
+                <div
+                  key={`${d.source}-${d.label}`}
+                  className="flex justify-between text-accent-dark"
+                >
+                  <dt>{d.source === 'promo' ? `Промокод ${d.label}` : d.label}</dt>
+                  <dd>{formatTenge(-d.amount)}</dd>
+                </div>
+              ))}
+              {o.discountTotal > 0 && o.discounts.length === 0 && (
                 <div className="flex justify-between text-accent-dark">
                   <dt>Скидка{o.promoCode && ` (промокод ${o.promoCode})`}</dt>
                   <dd>{formatTenge(-o.discountTotal)}</dd>

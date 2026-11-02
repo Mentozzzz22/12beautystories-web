@@ -35,6 +35,11 @@ export function CartPage() {
         <aside className="h-fit space-y-6 rounded-3xl bg-sand p-6">
           <PromoForm initial={state.promoCode} applied={promoApplied} message={promoMessage} />
           <OrderSummary quote={quote} fallbackSubtotal={fallbackSubtotal} />
+          {quote?.bundleHints?.map((h) => (
+            <p key={`${h.line}-${h.item}`} className="text-sm text-accent-dark">
+              Добавьте {h.item} {h.line}: скидка на набор вырастет до {h.percent}%
+            </p>
+          ))}
           {error && error.code !== 'invalid_promo' && (
             <p role="alert" className="text-sm text-sale">
               {error.code === 'variant_unavailable'

@@ -640,6 +640,174 @@ func (p *Postgres) DeleteRule(ctx context.Context, id int64) error {
 	return affected(p.db.Exec(ctx, `DELETE FROM discount_rules WHERE id = $1`, id))
 }
 
+// ---- Bundle offers ----
+
+// BundleOffers returns all offers with their groups and tiers.
+func (p *Postgres) BundleOffers(ctx context.Context) ([]BundleOffer, error) {
+	rows, err := p.db.Query(ctx, `SELECT id, name, is_active, starts_at, ends_at FROM bundle_offers ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("query offers: %w", err)
+	}
+	offers := []BundleOffer{}
+	index := make(map[int64]int)
+	for rows.Next() {
+		o := BundleOffer{Groups: []BundleGroup{}, Tiers: []BundleTier{}}
+		if err := rows.Scan(&o.ID, &o.Name, &o.IsActive, &o.StartsAt, &o.EndsAt); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan offer: %w", err)
+		}
+		index[o.ID] = len(offers)
+		offers = append(offers, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read offers: %w", err)
+	}
+
+	rows, err = p.db.Query(ctx, `
+		SELECT g.offer_id, g.name,
+		       ARRAY(SELECT gp.product_id FROM bundle_group_products gp
+		             WHERE gp.offer_id = g.offer_id AND gp.position = g.position ORDER BY gp.product_id)
+		FROM bundle_groups g ORDER BY g.offer_id, g.position`)
+	if err != nil {
+		return nil, fmt.Errorf("query groups: %w", err)
+	}
+	for rows.Next() {
+		var (
+			offerID int64
+			g       BundleGroup
+		)
+		if err := rows.Scan(&offerID, &g.Name, &g.ProductIDs); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan group: %w", err)
+		}
+		o := &offers[index[offerID]]
+		o.Groups = append(o.Groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read groups: %w", err)
+	}
+
+	rows, err = p.db.Query(ctx, `
+		SELECT t.id, t.offer_id, t.percent, s.group_position, s.label
+		FROM bundle_tiers t JOIN bundle_tier_slots s ON s.tier_id = t.id
+		ORDER BY t.offer_id, t.sort, t.id, s.group_position`)
+	if err != nil {
+		return nil, fmt.Errorf("query tiers: %w", err)
+	}
+	var lastTier int64
+	for rows.Next() {
+		var (
+			tierID, offerID, percent int64
+			s                        BundleSlot
+		)
+		if err := rows.Scan(&tierID, &offerID, &percent, &s.Group, &s.Label); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan tier: %w", err)
+		}
+		o := &offers[index[offerID]]
+		if tierID != lastTier {
+			o.Tiers = append(o.Tiers, BundleTier{Percent: percent})
+			lastTier = tierID
+		}
+		t := &o.Tiers[len(o.Tiers)-1]
+		t.Slots = append(t.Slots, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read tiers: %w", err)
+	}
+	return offers, nil
+}
+
+// SaveBundleOffer creates (ID 0) or updates an offer, replacing its groups and tiers.
+func (p *Postgres) SaveBundleOffer(ctx context.Context, o BundleOffer) (BundleOffer, error) {
+	if err := o.validate(); err != nil {
+		return BundleOffer{}, err
+	}
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return BundleOffer{}, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if o.ID == 0 {
+		err = tx.QueryRow(ctx, `
+			INSERT INTO bundle_offers (name, is_active, starts_at, ends_at)
+			VALUES ($1, $2, $3, $4) RETURNING id`,
+			o.Name, o.IsActive, o.StartsAt, o.EndsAt).Scan(&o.ID)
+	} else {
+		err = affected(tx.Exec(ctx, `
+			UPDATE bundle_offers SET name = $2, is_active = $3, starts_at = $4, ends_at = $5 WHERE id = $1`,
+			o.ID, o.Name, o.IsActive, o.StartsAt, o.EndsAt))
+	}
+	if err != nil {
+		return BundleOffer{}, mapErr(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM bundle_tiers WHERE offer_id = $1`, o.ID); err != nil {
+		return BundleOffer{}, fmt.Errorf("clear tiers: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM bundle_groups WHERE offer_id = $1`, o.ID); err != nil {
+		return BundleOffer{}, fmt.Errorf("clear groups: %w", err)
+	}
+	for i, g := range o.Groups {
+		if _, err := tx.Exec(ctx, `INSERT INTO bundle_groups (offer_id, position, name) VALUES ($1, $2, $3)`,
+			o.ID, i, g.Name); err != nil {
+			return BundleOffer{}, fmt.Errorf("insert group: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO bundle_group_products (offer_id, position, product_id)
+			SELECT $1::bigint, $2::int, unnest($3::bigint[]) ON CONFLICT DO NOTHING`,
+			o.ID, i, g.ProductIDs); err != nil {
+			return BundleOffer{}, mapErr(err)
+		}
+	}
+	for i, t := range o.Tiers {
+		var tierID int64
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO bundle_tiers (offer_id, percent, sort) VALUES ($1, $2, $3) RETURNING id`,
+			o.ID, t.Percent, i).Scan(&tierID); err != nil {
+			return BundleOffer{}, fmt.Errorf("insert tier: %w", err)
+		}
+		for _, s := range t.Slots {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO bundle_tier_slots (tier_id, group_position, label) VALUES ($1, $2, $3)`,
+				tierID, s.Group, s.Label); err != nil {
+				return BundleOffer{}, fmt.Errorf("insert slot: %w", err)
+			}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return BundleOffer{}, fmt.Errorf("commit: %w", err)
+	}
+	return o, nil
+}
+
+// DeleteBundleOffer removes an offer with its groups and tiers.
+func (p *Postgres) DeleteBundleOffer(ctx context.Context, id int64) error {
+	return affected(p.db.Exec(ctx, `DELETE FROM bundle_offers WHERE id = $1`, id))
+}
+
+// BundleOptions lists products available for bundle groups with their variant labels.
+func (p *Postgres) BundleOptions(ctx context.Context) ([]BundleOption, error) {
+	rows, err := p.db.Query(ctx, `
+		SELECT p.id, p.name, COALESCE(l.name, ''),
+		       ARRAY(SELECT DISTINCT v.label FROM product_variants v
+		             WHERE v.product_id = p.id AND v.label <> '' ORDER BY v.label)
+		FROM products p LEFT JOIN product_lines l ON l.id = p.line_id
+		ORDER BY l.name NULLS LAST, p.name`)
+	if err != nil {
+		return nil, fmt.Errorf("query bundle options: %w", err)
+	}
+	options, err := pgx.CollectRows(rows, pgx.RowToStructByPos[BundleOption])
+	if err != nil {
+		return nil, fmt.Errorf("collect bundle options: %w", err)
+	}
+	if options == nil {
+		options = []BundleOption{}
+	}
+	return options, nil
+}
+
 // ---- Orders ----
 
 const orderListColumns = `
@@ -722,9 +890,11 @@ func (p *Postgres) Order(ctx context.Context, id int64) (Order, error) {
 func getOrder(ctx context.Context, q querier, id int64) (Order, error) {
 	var o Order
 	err := scanOrderListItem(q.QueryRow(ctx, `
-		SELECT `+orderListColumns+`, o.customer_id, o.address, o.comment, o.promo_code, o.subtotal, o.discount_total
+		SELECT `+orderListColumns+`, o.customer_id, o.address, o.comment, o.promo_code, o.subtotal, o.discount_total,
+		       o.discounts
 		FROM orders o WHERE o.id = $1`, id),
-		&o.OrderListItem, &o.CustomerID, &o.Address, &o.Comment, &o.PromoCode, &o.Subtotal, &o.DiscountTotal)
+		&o.OrderListItem, &o.CustomerID, &o.Address, &o.Comment, &o.PromoCode, &o.Subtotal, &o.DiscountTotal,
+		&o.Discounts)
 	if err != nil {
 		return Order{}, mapErr(err)
 	}

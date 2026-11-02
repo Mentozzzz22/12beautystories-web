@@ -298,7 +298,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-cream p-5 shadow-xl sm:max-w-lg sm:rounded-3xl sm:p-6"
+        className="relative max-h-[92dvh] w-full overflow-y-auto [scrollbar-width:none] rounded-t-3xl bg-cream p-5 shadow-xl sm:max-w-lg sm:rounded-3xl sm:p-6"
       >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-2xl">{title}</h2>

@@ -30,6 +30,10 @@ func (f *fakeStore) Variants(_ context.Context, ids []int64) (map[int64]Variant,
 
 func (f *fakeStore) ActiveRules(context.Context) ([]pricing.Rule, error) { return f.rules, nil }
 
+func (f *fakeStore) ActiveBundles(context.Context) ([]pricing.BundleTier, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) Promo(_ context.Context, code string) (*pricing.Promo, error) {
 	return f.promos[code], nil
 }

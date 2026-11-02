@@ -18,6 +18,13 @@ type Line struct {
 	BrandID   int64
 	UnitPrice int64
 	Quantity  int
+	// ProductID, LineID (0 when the product has no line) and Label match the line to bundle slots.
+	ProductID int64
+	LineID    int64
+	LineName  string
+	Label     string
+	// OnSale marks a reduced price, which never joins a bundle.
+	OnSale bool
 }
 
 // Rule is an automatic discount. A nil BrandID applies to the whole cart,
@@ -57,8 +64,9 @@ type Source string
 
 // Discount sources.
 const (
-	SourceRule  Source = "rule"
-	SourcePromo Source = "promo"
+	SourceRule   Source = "rule"
+	SourcePromo  Source = "promo"
+	SourceBundle Source = "bundle"
 )
 
 // Discount is one applied discount.
@@ -75,11 +83,14 @@ type Quote struct {
 	DiscountTotal int64       `json:"discountTotal"`
 	Total         int64       `json:"total"`
 	PromoStatus   PromoStatus `json:"promoStatus,omitempty"`
+	// BundleHints is set only while bundle discounts are the ones applied.
+	BundleHints []BundleHint `json:"bundleHints,omitempty"`
 }
 
-// Calculate applies the best rule per scope (each brand and the whole cart), then the promo code.
-// A promo that cannot combine with rules replaces them only when it gives a bigger discount.
-func Calculate(lines []Line, rules []Rule, promo *Promo) Quote {
+// Calculate picks the bigger of the bundle discounts and the rules (the best rule per scope: each
+// brand and the whole cart), then applies the promo code.
+// A promo that cannot combine with them replaces them only when it gives a bigger discount.
+func Calculate(lines []Line, rules []Rule, bundles []BundleTier, promo *Promo) Quote {
 	var subtotal int64
 	brandSubtotals := make(map[int64]int64)
 	for _, l := range lines {
@@ -97,6 +108,15 @@ func Calculate(lines []Line, rules []Rule, promo *Promo) Quote {
 
 	q := Quote{Subtotal: subtotal, Discounts: ruleDiscounts}
 
+	bundleDiscs, hints := bundleDiscounts(lines, bundles)
+	var bundleTotal int64
+	for _, d := range bundleDiscs {
+		bundleTotal += d.Amount
+	}
+	if bundleTotal > ruleTotal {
+		q.Discounts, q.BundleHints, ruleTotal = bundleDiscs, hints, min(bundleTotal, subtotal)
+	}
+
 	if promo != nil {
 		switch {
 		case subtotal < promo.MinSubtotal:
@@ -109,6 +129,7 @@ func Calculate(lines []Line, rules []Rule, promo *Promo) Quote {
 			amount := discount(promo.Kind, promo.Value, subtotal)
 			if amount > ruleTotal {
 				q.Discounts = []Discount{{Source: SourcePromo, Label: promo.Code, Amount: amount}}
+				q.BundleHints = nil
 				q.PromoStatus = PromoApplied
 			} else {
 				q.PromoStatus = PromoNotBetter

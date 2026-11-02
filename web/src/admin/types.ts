@@ -132,6 +132,46 @@ export interface Rule {
   endsAt: string | null
 }
 
+export interface BundleGroup {
+  name: string
+  productIds: number[]
+}
+
+export interface BundleSlot {
+  /** Index in BundleOffer.groups. */
+  group: number
+  /** Required variant label; empty accepts any variant. */
+  label: string
+}
+
+export interface BundleTier {
+  percent: number
+  slots: BundleSlot[]
+}
+
+export interface BundleOffer {
+  id: number
+  name: string
+  isActive: boolean
+  startsAt: string | null
+  endsAt: string | null
+  groups: BundleGroup[]
+  tiers: BundleTier[]
+}
+
+export interface BundleOption {
+  id: number
+  name: string
+  lineName: string
+  labels: string[]
+}
+
+export interface OrderDiscount {
+  source: 'rule' | 'promo' | 'bundle'
+  label: string
+  amount: number
+}
+
 export type OrderStatus =
   'new' | 'awaiting_payment' | 'paid' | 'shipped' | 'completed' | 'cancelled'
 
@@ -163,6 +203,8 @@ export interface Order extends OrderListItem {
   promoCode: string
   subtotal: number
   discountTotal: number
+  /** Empty for orders placed before discount names were stored. */
+  discounts: OrderDiscount[]
   items: OrderItem[]
 }
 

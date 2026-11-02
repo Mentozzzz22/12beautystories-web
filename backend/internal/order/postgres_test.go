@@ -3,6 +3,7 @@ package order_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -215,5 +216,56 @@ func TestCreateConcurrentLastItem(t *testing.T) {
 	}
 	if s := stock(t, pool, id); s != 0 {
 		t.Errorf("stock = %d, want 0", s)
+	}
+}
+
+func insertBundleOffer(t *testing.T, pool *pgxpool.Pool, active bool) {
+	t.Helper()
+	ctx := context.Background()
+	var offerID, tierID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO bundle_offers (name, is_active) VALUES ('Наборы', $1) RETURNING id`, active).Scan(&offerID); err != nil {
+		t.Fatal(err)
+	}
+	dbtest.Exec(t, pool, `INSERT INTO bundle_groups (offer_id, position, name) VALUES ($1, 0, 'шампунь')`, offerID)
+	dbtest.Exec(t, pool, `
+		INSERT INTO bundle_group_products (offer_id, position, product_id)
+		SELECT $1::bigint, 0, id FROM products WHERE slug = 'davines-energizing-shampoo'`, offerID)
+	if err := pool.QueryRow(ctx, `INSERT INTO bundle_tiers (offer_id, percent) VALUES ($1, 15) RETURNING id`, offerID).Scan(&tierID); err != nil {
+		t.Fatal(err)
+	}
+	dbtest.Exec(t, pool, `INSERT INTO bundle_tier_slots (tier_id, group_position, label) VALUES ($1, 0, '250 ml')`, tierID)
+}
+
+func TestQuoteAppliesActiveBundleAndOrderKeepsItsName(t *testing.T) {
+	pool, store := setup(t)
+	ctx := context.Background()
+	dbtest.Exec(t, pool, `UPDATE discount_rules SET is_active = false`)
+	insertBundleOffer(t, pool, false)
+	insertBundleOffer(t, pool, true)
+	id := variantID(t, pool, "davines-energizing-shampoo", "250 ml")
+
+	tiers, err := store.ActiveBundles(ctx)
+	if err != nil || len(tiers) != 1 {
+		t.Fatalf("ActiveBundles() = %+v, %v; want only the active tier", tiers, err)
+	}
+
+	service := order.NewService(store, nil, nil)
+	placed, err := service.Place(ctx, []order.Item{{VariantID: id, Quantity: 1}}, "", order.Customer{
+		Name: "Test", Phone: "+77011234567", Delivery: order.DeliveryPickup, PrivacyAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Place() error = %v", err)
+	}
+	want := []pricing.Discount{{Source: pricing.SourceBundle, Label: "Набор Energizing: −15%", Amount: 2700}}
+	if !reflect.DeepEqual(placed.Quote.Discounts, want) || placed.Quote.Total != 15300 {
+		t.Fatalf("quote = %+v, want %+v", placed.Quote, want)
+	}
+
+	var stored []pricing.Discount
+	if err := pool.QueryRow(ctx, `SELECT discounts FROM orders WHERE id = $1`, placed.ID).Scan(&stored); err != nil {
+		t.Fatalf("read discounts: %v", err)
+	}
+	if !reflect.DeepEqual(stored, want) {
+		t.Errorf("stored discounts = %+v, want %+v", stored, want)
 	}
 }

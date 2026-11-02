@@ -13,6 +13,7 @@ const NAV = [
   { to: '/admin/banners', label: 'Баннеры' },
   { to: '/admin/promos', label: 'Промокоды' },
   { to: '/admin/rules', label: 'Скидки' },
+  { to: '/admin/bundles', label: 'Наборы' },
 ] as const
 
 export function AdminLayout() {

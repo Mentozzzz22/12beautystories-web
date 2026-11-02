@@ -24,10 +24,12 @@ func NewPostgres(db *pgxpool.Pool) *Postgres {
 // Variants returns purchasable variants (active variant, product and brand) by ID.
 func (p *Postgres) Variants(ctx context.Context, ids []int64) (map[int64]Variant, error) {
 	rows, err := p.db.Query(ctx, `
-		SELECT v.id, p.brand_id, p.name, v.label, v.price, v.stock
+		SELECT v.id, p.brand_id, p.name, v.label, v.price, v.stock,
+		       p.id, COALESCE(l.id, 0), COALESCE(l.name, ''), v.compare_at_price IS NOT NULL
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id AND p.is_active
 		JOIN brands b ON b.id = p.brand_id AND b.is_active
+		LEFT JOIN product_lines l ON l.id = p.line_id
 		WHERE v.id = ANY($1) AND v.is_active`, ids)
 	if err != nil {
 		return nil, fmt.Errorf("query variants: %w", err)
@@ -60,6 +62,60 @@ func (p *Postgres) ActiveRules(ctx context.Context) ([]pricing.Rule, error) {
 		return nil, fmt.Errorf("collect rules: %w", err)
 	}
 	return rules, nil
+}
+
+// ActiveBundles returns the tiers of bundle offers that are enabled and within their dates.
+func (p *Postgres) ActiveBundles(ctx context.Context) ([]pricing.BundleTier, error) {
+	rows, err := p.db.Query(ctx, `
+		SELECT t.id, t.offer_id, t.percent, s.group_position, g.name, s.label,
+		       ARRAY(SELECT gp.product_id FROM bundle_group_products gp
+		             JOIN products pr ON pr.id = gp.product_id AND pr.is_active
+		             WHERE gp.offer_id = t.offer_id AND gp.position = s.group_position
+		             ORDER BY pr.id),
+		       ARRAY(SELECT COALESCE(pr.line_id, 0) FROM bundle_group_products gp
+		             JOIN products pr ON pr.id = gp.product_id AND pr.is_active
+		             WHERE gp.offer_id = t.offer_id AND gp.position = s.group_position
+		             ORDER BY pr.id)
+		FROM bundle_offers o
+		JOIN bundle_tiers t ON t.offer_id = o.id
+		JOIN bundle_tier_slots s ON s.tier_id = t.id
+		JOIN bundle_groups g ON g.offer_id = t.offer_id AND g.position = s.group_position
+		WHERE o.is_active
+		  AND (o.starts_at IS NULL OR o.starts_at <= now())
+		  AND (o.ends_at IS NULL OR o.ends_at > now())
+		ORDER BY o.id, t.sort, t.id, s.group_position`)
+	if err != nil {
+		return nil, fmt.Errorf("query bundles: %w", err)
+	}
+	defer rows.Close()
+
+	var (
+		tiers  []pricing.BundleTier
+		lastID int64
+	)
+	for rows.Next() {
+		var (
+			id, offerID, percent int64
+			slot                 pricing.BundleSlot
+			productIDs, lineIDs  []int64
+		)
+		if err := rows.Scan(&id, &offerID, &percent, &slot.Group, &slot.Name, &slot.Label, &productIDs, &lineIDs); err != nil {
+			return nil, fmt.Errorf("scan bundle: %w", err)
+		}
+		for i, productID := range productIDs {
+			slot.Products = append(slot.Products, pricing.BundleProduct{ProductID: productID, LineID: lineIDs[i]})
+		}
+		if id != lastID {
+			tiers = append(tiers, pricing.BundleTier{OfferID: offerID, Percent: percent})
+			lastID = id
+		}
+		last := &tiers[len(tiers)-1]
+		last.Slots = append(last.Slots, slot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read bundles: %w", err)
+	}
+	return tiers, nil
 }
 
 // Promo returns a usable promo code or nil.
@@ -121,11 +177,12 @@ func (p *Postgres) Create(ctx context.Context, o Order) (Order, error) {
 
 	err = tx.QueryRow(ctx, `
 		INSERT INTO orders (customer_id, customer_name, phone, delivery_method, address, comment, promo_code,
-		                    subtotal, discount_total, total, privacy_accepted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+		                    subtotal, discount_total, total, discounts, privacy_accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
 		RETURNING id, created_at`,
 		customerID, c.Name, c.Phone, c.Delivery, c.Address, c.Comment, o.PromoCode,
-		o.Quote.Subtotal, o.Quote.DiscountTotal, o.Quote.Total).Scan(&o.ID, &o.CreatedAt)
+		o.Quote.Subtotal, o.Quote.DiscountTotal, o.Quote.Total,
+		append([]pricing.Discount{}, o.Quote.Discounts...)).Scan(&o.ID, &o.CreatedAt)
 	if err != nil {
 		return Order{}, fmt.Errorf("insert order: %w", err)
 	}

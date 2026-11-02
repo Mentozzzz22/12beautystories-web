@@ -47,6 +47,11 @@ type AdminStore interface {
 	SaveRule(ctx context.Context, r admin.Rule) (admin.Rule, error)
 	DeleteRule(ctx context.Context, id int64) error
 
+	BundleOffers(ctx context.Context) ([]admin.BundleOffer, error)
+	SaveBundleOffer(ctx context.Context, o admin.BundleOffer) (admin.BundleOffer, error)
+	DeleteBundleOffer(ctx context.Context, id int64) error
+	BundleOptions(ctx context.Context) ([]admin.BundleOption, error)
+
 	Orders(ctx context.Context, f admin.OrderFilter) (admin.OrderPage, error)
 	Order(ctx context.Context, id int64) (admin.Order, error)
 	SetOrderStatus(ctx context.Context, id int64, status string) (admin.Order, error)
@@ -119,6 +124,12 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	protected.HandleFunc("POST /api/admin/rules", create(a, s.SaveRule))
 	protected.HandleFunc("PUT /api/admin/rules/{id}", update(a, s.SaveRule, func(r *admin.Rule, id int64) { r.ID = id }))
 	protected.HandleFunc("DELETE /api/admin/rules/{id}", remove(a, s.DeleteRule))
+
+	protected.HandleFunc("GET /api/admin/bundles", list(a, s.BundleOffers))
+	protected.HandleFunc("POST /api/admin/bundles", create(a, s.SaveBundleOffer))
+	protected.HandleFunc("PUT /api/admin/bundles/{id}", update(a, s.SaveBundleOffer, func(o *admin.BundleOffer, id int64) { o.ID = id }))
+	protected.HandleFunc("DELETE /api/admin/bundles/{id}", remove(a, s.DeleteBundleOffer))
+	protected.HandleFunc("GET /api/admin/bundle-options", list(a, s.BundleOptions))
 
 	protected.HandleFunc("GET /api/admin/orders", a.adminOrders)
 	protected.HandleFunc("GET /api/admin/orders/{id}", get(a, s.Order))

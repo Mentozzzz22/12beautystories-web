@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -460,5 +461,131 @@ func TestUpdateCustomer(t *testing.T) {
 	}
 	if _, err := repo.UpdateCustomer(ctx, 999_999, admin.CustomerUpdate{Name: "X"}); !errors.Is(err, apperr.ErrNotFound) {
 		t.Errorf("unknown customer error = %v, want ErrNotFound", err)
+	}
+}
+
+func productID(t *testing.T, pool *pgxpool.Pool, slug string) int64 {
+	t.Helper()
+	var id int64
+	if err := pool.QueryRow(context.Background(), `SELECT id FROM products WHERE slug = $1`, slug).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestBundleOfferLifecycle(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+	energizing := productID(t, pool, "davines-energizing-shampoo")
+	minu := productID(t, pool, "davines-minu-shampoo")
+
+	offer := admin.BundleOffer{
+		Name:     "Наборы",
+		IsActive: true,
+		Groups: []admin.BundleGroup{
+			{Name: "шампунь", ProductIDs: []int64{energizing}},
+			{Name: "уход", ProductIDs: []int64{minu}},
+		},
+		Tiers: []admin.BundleTier{
+			{Percent: 15, Slots: []admin.BundleSlot{{Group: 0, Label: "250 ml"}}},
+			{Percent: 20, Slots: []admin.BundleSlot{{Group: 0, Label: "250 ml"}, {Group: 1}}},
+		},
+	}
+	created, err := repo.SaveBundleOffer(ctx, offer)
+	if err != nil {
+		t.Fatalf("SaveBundleOffer(create) error = %v", err)
+	}
+
+	offers, err := repo.BundleOffers(ctx)
+	if err != nil {
+		t.Fatalf("BundleOffers() error = %v", err)
+	}
+	offer.ID = created.ID
+	if !reflect.DeepEqual(offers, []admin.BundleOffer{offer}) {
+		t.Fatalf("offers = %+v, want %+v", offers, offer)
+	}
+
+	// Saving replaces groups and tiers instead of adding to them.
+	offer.Groups = offer.Groups[:1]
+	offer.Tiers = offer.Tiers[:1]
+	if _, err := repo.SaveBundleOffer(ctx, offer); err != nil {
+		t.Fatalf("SaveBundleOffer(update) error = %v", err)
+	}
+	offers, _ = repo.BundleOffers(ctx)
+	if !reflect.DeepEqual(offers, []admin.BundleOffer{offer}) {
+		t.Fatalf("after update offers = %+v, want %+v", offers, offer)
+	}
+
+	// Deleting a product takes it out of the group but keeps the offer.
+	if _, err := pool.Exec(ctx, `DELETE FROM products WHERE id = $1`, energizing); err != nil {
+		t.Fatal(err)
+	}
+	offers, _ = repo.BundleOffers(ctx)
+	if len(offers) != 1 || len(offers[0].Groups[0].ProductIDs) != 0 {
+		t.Errorf("after product delete offers = %+v", offers)
+	}
+
+	if err := repo.DeleteBundleOffer(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteBundleOffer() error = %v", err)
+	}
+	if offers, _ = repo.BundleOffers(ctx); len(offers) != 0 {
+		t.Errorf("offers after delete = %+v", offers)
+	}
+}
+
+func TestBundleOfferValidation(t *testing.T) {
+	_, repo := setup(t)
+	ctx := context.Background()
+	valid := func() admin.BundleOffer {
+		return admin.BundleOffer{
+			Name:   "Наборы",
+			Groups: []admin.BundleGroup{{Name: "шампунь", ProductIDs: []int64{1}}},
+			Tiers:  []admin.BundleTier{{Percent: 15, Slots: []admin.BundleSlot{{Group: 0}}}},
+		}
+	}
+	tests := []struct {
+		name   string
+		change func(*admin.BundleOffer)
+	}{
+		{"no name", func(o *admin.BundleOffer) { o.Name = " " }},
+		{"no groups", func(o *admin.BundleOffer) { o.Groups = nil; o.Tiers[0].Slots = nil }},
+		{"group without products", func(o *admin.BundleOffer) { o.Groups[0].ProductIDs = nil }},
+		{"no tiers", func(o *admin.BundleOffer) { o.Tiers = nil }},
+		{"percent too big", func(o *admin.BundleOffer) { o.Tiers[0].Percent = 101 }},
+		{"tier without slots", func(o *admin.BundleOffer) { o.Tiers[0].Slots = nil }},
+		{"unknown group", func(o *admin.BundleOffer) { o.Tiers[0].Slots[0].Group = 5 }},
+		{"same group twice", func(o *admin.BundleOffer) {
+			o.Tiers[0].Slots = []admin.BundleSlot{{Group: 0}, {Group: 0, Label: "200"}}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := valid()
+			tt.change(&o)
+			var verr *apperr.ValidationError
+			if _, err := repo.SaveBundleOffer(ctx, o); !errors.As(err, &verr) {
+				t.Errorf("error = %v, want validation fields", err)
+			}
+		})
+	}
+}
+
+func TestBundleOptions(t *testing.T) {
+	_, repo := setup(t)
+	options, err := repo.BundleOptions(context.Background())
+	if err != nil {
+		t.Fatalf("BundleOptions() error = %v", err)
+	}
+	if len(options) != 4 {
+		t.Fatalf("options = %+v, want 4 products", options)
+	}
+	var energizing admin.BundleOption
+	for _, o := range options {
+		if o.Name == "Energizing Shampoo" {
+			energizing = o
+		}
+	}
+	if energizing.LineName != "Energizing" || len(energizing.Labels) != 3 {
+		t.Errorf("energizing = %+v", energizing)
 	}
 }

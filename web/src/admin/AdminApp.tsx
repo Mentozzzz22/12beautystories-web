@@ -11,6 +11,7 @@ import { OrdersPage } from './pages/OrdersPage'
 import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { PromosPage } from './pages/PromosPage'
+import { BundlesPage } from './pages/BundlesPage'
 import { RulesPage } from './pages/RulesPage'
 
 const adminRoutes: RouteObject[] = [
@@ -30,6 +31,7 @@ const adminRoutes: RouteObject[] = [
       { path: 'banners', element: <BannersPage /> },
       { path: 'promos', element: <PromosPage /> },
       { path: 'rules', element: <RulesPage /> },
+      { path: 'bundles', element: <BundlesPage /> },
       { path: '*', element: <Navigate to="orders" replace /> },
     ],
   },

@@ -141,7 +141,7 @@ func TestCalculate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Calculate(tt.lines, tt.rules, tt.promo)
+			got := Calculate(tt.lines, tt.rules, nil, tt.promo)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Calculate() =\n%+v\nwant\n%+v", got, tt.want)
 			}
