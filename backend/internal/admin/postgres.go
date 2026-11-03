@@ -345,7 +345,7 @@ func getProduct(ctx context.Context, q querier, id int64) (Product, error) {
 	}
 
 	variantRows, err := q.Query(ctx, `
-		SELECT id, label, sku, price, compare_at_price, stock, is_active, image_url
+		SELECT id, label, sku, price, sale_price, stock, is_active, image_url
 		FROM product_variants WHERE product_id = $1 ORDER BY sort, id`, id)
 	if err != nil {
 		return Product{}, fmt.Errorf("query variants: %w", err)
@@ -464,18 +464,18 @@ func saveVariants(ctx context.Context, tx pgx.Tx, productID int64, variants []Va
 	for i, v := range variants {
 		if v.ID == 0 {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO product_variants (product_id, label, sku, price, compare_at_price, stock, sort, is_active, image_url)
+				INSERT INTO product_variants (product_id, label, sku, price, sale_price, stock, sort, is_active, image_url)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-				productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive, v.ImageURL); err != nil {
+				productID, v.Label, v.SKU, v.Price, v.SalePrice, v.Stock, i, v.IsActive, v.ImageURL); err != nil {
 				return fmt.Errorf("insert variant: %w", mapErr(err))
 			}
 			continue
 		}
 		err := affected(tx.Exec(ctx, `
-			UPDATE product_variants SET label = $3, sku = $4, price = $5, compare_at_price = $6, stock = $7,
+			UPDATE product_variants SET label = $3, sku = $4, price = $5, sale_price = $6, stock = $7,
 			       sort = $8, is_active = $9, image_url = $10
 			WHERE id = $1 AND product_id = $2`,
-			v.ID, productID, v.Label, v.SKU, v.Price, v.CompareAtPrice, v.Stock, i, v.IsActive, v.ImageURL))
+			v.ID, productID, v.Label, v.SKU, v.Price, v.SalePrice, v.Stock, i, v.IsActive, v.ImageURL))
 		if errors.Is(err, apperr.ErrNotFound) {
 			return apperr.Field(fmt.Sprintf("variants.%d.id", i), apperr.Invalid)
 		}
@@ -806,6 +806,90 @@ func (p *Postgres) BundleOptions(ctx context.Context) ([]BundleOption, error) {
 		options = []BundleOption{}
 	}
 	return options, nil
+}
+
+// ---- Sales ----
+
+// SaleItems lists all products with their brand, line and current prices.
+func (p *Postgres) SaleItems(ctx context.Context) ([]SaleItem, error) {
+	rows, err := p.db.Query(ctx, `
+		SELECT p.id, p.name, b.id, b.name, COALESCE(l.id, 0), COALESCE(l.name, ''),
+		       COALESCE((SELECT m.url FROM product_media m
+		                 WHERE m.product_id = p.id AND m.kind = 'image'
+		                 ORDER BY m.sort, m.id LIMIT 1), ''),
+		       COALESCE((SELECT jsonb_agg(jsonb_build_object(
+		                     'label', v.label, 'price', v.price, 'salePrice', v.sale_price)
+		                     ORDER BY v.sort, v.id)
+		                 FROM product_variants v WHERE v.product_id = p.id), '[]')
+		FROM products p
+		JOIN brands b ON b.id = p.brand_id
+		LEFT JOIN product_lines l ON l.id = p.line_id
+		ORDER BY b.sort, b.name, l.sort NULLS LAST, l.name, p.sort, p.name`)
+	if err != nil {
+		return nil, fmt.Errorf("query sale items: %w", err)
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[SaleItem])
+	if err != nil {
+		return nil, fmt.Errorf("collect sale items: %w", err)
+	}
+	if items == nil {
+		items = []SaleItem{}
+	}
+	return items, nil
+}
+
+// ApplySale sets the sale price of every variant of the products to Percent off its regular price.
+// Variants where the rounded price would not be lower keep their current sale price.
+func (p *Postgres) ApplySale(ctx context.Context, s SaleRequest) (SaleResult, error) {
+	if err := s.validate(false); err != nil {
+		return SaleResult{}, err
+	}
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return SaleResult{}, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := tx.Query(ctx,
+		`SELECT id, price FROM product_variants WHERE product_id = ANY($1) FOR UPDATE`, s.ProductIDs)
+	if err != nil {
+		return SaleResult{}, fmt.Errorf("query variants: %w", err)
+	}
+	type variant struct{ ID, Price int64 }
+	variants, err := pgx.CollectRows(rows, pgx.RowToStructByPos[variant])
+	if err != nil {
+		return SaleResult{}, fmt.Errorf("collect variants: %w", err)
+	}
+
+	var res SaleResult
+	for _, v := range variants {
+		sale, ok := SalePrice(v.Price, s.Percent)
+		if !ok {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `UPDATE product_variants SET sale_price = $2 WHERE id = $1`, v.ID, sale); err != nil {
+			return SaleResult{}, fmt.Errorf("update variant: %w", err)
+		}
+		res.Updated++
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return SaleResult{}, fmt.Errorf("commit: %w", err)
+	}
+	return res, nil
+}
+
+// ClearSale removes the sale price from every variant of the products.
+func (p *Postgres) ClearSale(ctx context.Context, s SaleRequest) (SaleResult, error) {
+	if err := s.validate(true); err != nil {
+		return SaleResult{}, err
+	}
+	tag, err := p.db.Exec(ctx, `
+		UPDATE product_variants SET sale_price = NULL
+		WHERE product_id = ANY($1) AND sale_price IS NOT NULL`, s.ProductIDs)
+	if err != nil {
+		return SaleResult{}, fmt.Errorf("clear sale: %w", err)
+	}
+	return SaleResult{Updated: int(tag.RowsAffected())}, nil
 }
 
 // ---- Orders ----

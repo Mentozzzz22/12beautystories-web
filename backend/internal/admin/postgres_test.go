@@ -115,7 +115,7 @@ func TestSaveProductCreateAndReconcileVariants(t *testing.T) {
 		Media:      []admin.Media{{URL: "/uploads/a.jpg"}, {URL: "/uploads/b.jpg"}},
 		Variants: []admin.Variant{
 			{Label: "250 ml", Price: 17000, Stock: 3, IsActive: true, ImageURL: "/uploads/a.jpg"},
-			{Label: "1000 ml", Price: 45000, CompareAtPrice: ptr[int64](50000), Stock: 1, IsActive: true},
+			{Label: "1000 ml", Price: 50000, SalePrice: ptr[int64](45000), Stock: 1, IsActive: true},
 		},
 	})
 	if err != nil {
@@ -215,12 +215,12 @@ func TestSaveProductValidation(t *testing.T) {
 	_, err := repo.SaveProduct(ctx, admin.Product{
 		Media: []admin.Media{{URL: "/uploads/clip.mp4", Kind: "video"}},
 		Variants: []admin.Variant{
-			{Price: 100, CompareAtPrice: ptr[int64](50), ImageURL: "/uploads/other.jpg"},
+			{Price: 100, SalePrice: ptr[int64](150), ImageURL: "/uploads/other.jpg"},
 			{Price: -1, ImageURL: "/uploads/clip.mp4"},
 		},
 	})
 	for _, f := range []string{
-		"name", "brandId", "variants.0.label", "variants.0.compareAtPrice", "variants.0.imageUrl",
+		"name", "brandId", "variants.0.label", "variants.0.salePrice", "variants.0.imageUrl",
 		"variants.1.price", "variants.1.imageUrl",
 	} {
 		if fieldErr(t, err, f) == "" {
@@ -587,5 +587,91 @@ func TestBundleOptions(t *testing.T) {
 	}
 	if energizing.LineName != "Energizing" || len(energizing.Labels) != 3 {
 		t.Errorf("energizing = %+v", energizing)
+	}
+}
+
+func productIDs(t *testing.T, pool *pgxpool.Pool, slugs ...string) []int64 {
+	t.Helper()
+	var ids []int64
+	if err := pool.QueryRow(context.Background(),
+		`SELECT array_agg(id ORDER BY id) FROM products WHERE slug = ANY($1)`, slugs).Scan(&ids); err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+func salePrices(t *testing.T, repo *admin.Postgres, name string) []any {
+	t.Helper()
+	items, err := repo.SaleItems(context.Background())
+	if err != nil {
+		t.Fatalf("SaleItems() error = %v", err)
+	}
+	for _, it := range items {
+		if it.Name == name {
+			out := make([]any, 0, len(it.Variants))
+			for _, v := range it.Variants {
+				if v.SalePrice == nil {
+					out = append(out, nil)
+				} else {
+					out = append(out, *v.SalePrice)
+				}
+			}
+			return out
+		}
+	}
+	t.Fatalf("no sale item %q", name)
+	return nil
+}
+
+func TestApplyAndClearSale(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+	ids := productIDs(t, pool, "davines-energizing-shampoo", "davines-minu-shampoo")
+
+	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, int64(48000)}) {
+		t.Fatalf("seeded sale prices = %v", got)
+	}
+
+	res, err := repo.ApplySale(ctx, admin.SaleRequest{ProductIDs: ids, Percent: 30})
+	if err != nil {
+		t.Fatalf("ApplySale() error = %v", err)
+	}
+	if res.Updated != 4 {
+		t.Errorf("updated = %d, want 4", res.Updated)
+	}
+	// 9 000, 18 000 and 54 000 minus 30%; the old 48 000 sale price is replaced.
+	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{int64(6300), int64(12600), int64(37800)}) {
+		t.Errorf("energizing sale prices = %v", got)
+	}
+	if got := salePrices(t, repo, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
+		t.Errorf("minu sale prices = %v", got)
+	}
+
+	res, err = repo.ClearSale(ctx, admin.SaleRequest{ProductIDs: ids[:1]})
+	if err != nil {
+		t.Fatalf("ClearSale() error = %v", err)
+	}
+	if res.Updated != 3 {
+		t.Errorf("cleared = %d, want 3", res.Updated)
+	}
+	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, nil}) {
+		t.Errorf("energizing after clear = %v", got)
+	}
+	if got := salePrices(t, repo, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
+		t.Errorf("minu after clearing another product = %v", got)
+	}
+}
+
+func TestSaleValidation(t *testing.T) {
+	_, repo := setup(t)
+	ctx := context.Background()
+
+	_, err := repo.ApplySale(ctx, admin.SaleRequest{Percent: 100})
+	if fieldErr(t, err, "productIds") == "" || fieldErr(t, err, "percent") == "" {
+		t.Errorf("ApplySale error = %v, want productIds and percent", err)
+	}
+	_, err = repo.ClearSale(ctx, admin.SaleRequest{})
+	if fieldErr(t, err, "productIds") == "" {
+		t.Errorf("ClearSale error = %v, want productIds", err)
 	}
 }

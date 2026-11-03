@@ -20,6 +20,8 @@ import type {
   ProductListItem,
   Promo,
   Rule,
+  SaleItem,
+  SaleResult,
 } from './types'
 
 const BASE = '/api/admin'
@@ -130,4 +132,21 @@ export function useBundleOptions() {
     queryKey: ['admin', 'bundle-options'],
     queryFn: () => request<BundleOption[]>(`${BASE}/bundle-options`),
   })
+}
+
+const saleAction =
+  (kind: 'apply' | 'clear') => (body: { productIds: number[]; percent?: number }) =>
+    request<SaleResult>(`${BASE}/sale/${kind}`, json('POST', body))
+
+export function useSale() {
+  const qc = useQueryClient()
+  const items = useQuery({
+    queryKey: ['admin', 'sale'],
+    queryFn: () => request<SaleItem[]>(`${BASE}/sale`),
+  })
+  // Prices show up across the storefront and the product editor.
+  const invalidate = () => qc.invalidateQueries()
+  const apply = useMutation({ mutationFn: saleAction('apply'), onSuccess: invalidate })
+  const clear = useMutation({ mutationFn: saleAction('clear'), onSuccess: invalidate })
+  return { items, apply, clear }
 }

@@ -116,8 +116,9 @@ func (p *Postgres) Products(ctx context.Context, f Filter) (Page, error) {
 		JOIN brands b ON b.id = p.brand_id AND b.is_active
 		LEFT JOIN product_lines l ON l.id = p.line_id
 		JOIN LATERAL (
-		    SELECT (array_agg(pv.price ORDER BY pv.price, pv.id))[1] AS price,
-		           (array_agg(pv.compare_at_price ORDER BY pv.price, pv.id))[1] AS compare_at_price,
+		    SELECT (array_agg(COALESCE(pv.sale_price, pv.price) ORDER BY COALESCE(pv.sale_price, pv.price), pv.id))[1] AS price,
+		           (array_agg(CASE WHEN pv.sale_price IS NOT NULL THEN pv.price END
+		                      ORDER BY COALESCE(pv.sale_price, pv.price), pv.id))[1] AS compare_at_price,
 		           count(*) AS variant_count,
 		           sum(pv.stock) AS total_stock
 		    FROM product_variants pv
@@ -193,7 +194,8 @@ func (p *Postgres) Product(ctx context.Context, slug string) (Product, error) {
 	}
 
 	variantRows, err := p.db.Query(ctx, `
-		SELECT id, label, sku, price, compare_at_price, stock > 0, image_url
+		SELECT id, label, sku, COALESCE(sale_price, price),
+		       CASE WHEN sale_price IS NOT NULL THEN price END, stock > 0, image_url
 		FROM product_variants
 		WHERE product_id = $1 AND is_active
 		ORDER BY sort, price, id`, pr.ID)

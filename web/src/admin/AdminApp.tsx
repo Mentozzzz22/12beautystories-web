@@ -13,6 +13,7 @@ import { ProductsPage } from './pages/ProductsPage'
 import { PromosPage } from './pages/PromosPage'
 import { BundlesPage } from './pages/BundlesPage'
 import { RulesPage } from './pages/RulesPage'
+import { SalePage } from './pages/SalePage'
 
 const adminRoutes: RouteObject[] = [
   { path: 'login', element: <LoginPage /> },
@@ -32,6 +33,7 @@ const adminRoutes: RouteObject[] = [
       { path: 'promos', element: <PromosPage /> },
       { path: 'rules', element: <RulesPage /> },
       { path: 'bundles', element: <BundlesPage /> },
+      { path: 'sale', element: <SalePage /> },
       { path: '*', element: <Navigate to="orders" replace /> },
     ],
   },

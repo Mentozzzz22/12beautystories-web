@@ -66,10 +66,31 @@ export interface Variant {
   label: string
   sku: string
   price: number
-  compareAtPrice: number | null
+  salePrice: number | null
   stock: number
   isActive: boolean
   imageUrl: string
+}
+
+export interface SaleVariant {
+  label: string
+  price: number
+  salePrice: number | null
+}
+
+export interface SaleItem {
+  id: number
+  name: string
+  brandId: number
+  brandName: string
+  lineId: number
+  lineName: string
+  imageUrl: string
+  variants: SaleVariant[]
+}
+
+export interface SaleResult {
+  updated: number
 }
 
 export type OptionKind = 'none' | 'volume' | 'color'

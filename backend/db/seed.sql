@@ -49,17 +49,17 @@ FROM (VALUES
 JOIN products p ON p.slug = pc.product
 JOIN categories c ON c.slug = pc.category;
 
-INSERT INTO product_variants (product_id, label, price, compare_at_price, stock, sort)
-SELECT p.id, v.label, v.price, v.compare_at, v.stock, v.sort
+INSERT INTO product_variants (product_id, label, price, sale_price, stock, sort)
+SELECT p.id, v.label, v.price, v.sale, v.stock, v.sort
 FROM (VALUES
     ('davines-energizing-shampoo', '100 ml', 9000, NULL::bigint, 10, 1),
     ('davines-energizing-shampoo', '250 ml', 18000, NULL, 8, 2),
-    ('davines-energizing-shampoo', '1000 ml', 48000, 54000, 2, 3),
+    ('davines-energizing-shampoo', '1000 ml', 54000, 48000, 2, 3),
     ('davines-minu-shampoo', '250 ml', 19500, NULL, 5, 1),
     ('payot-hydra-24-cream', '', 24000, NULL, 6, 1),
     ('davines-paddle-brush', 'Чёрная', 12000, NULL, 3, 1),
     ('davines-paddle-brush', 'Розовая', 12000, NULL, 0, 2)
-) AS v(product, label, price, compare_at, stock, sort)
+) AS v(product, label, price, sale, stock, sort)
 JOIN products p ON p.slug = v.product;
 
 INSERT INTO product_media (product_id, url, sort)

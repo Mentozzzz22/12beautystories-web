@@ -83,14 +83,14 @@ type Media struct {
 
 // Variant is a purchasable option. ID 0 creates a new variant on save.
 type Variant struct {
-	ID             int64  `json:"id"`
-	Label          string `json:"label"`
-	SKU            string `json:"sku"`
-	Price          int64  `json:"price"`
-	CompareAtPrice *int64 `json:"compareAtPrice"`
-	Stock          int    `json:"stock"`
-	IsActive       bool   `json:"isActive"`
-	ImageURL       string `json:"imageUrl"`
+	ID        int64  `json:"id"`
+	Label     string `json:"label"`
+	SKU       string `json:"sku"`
+	Price     int64  `json:"price"`
+	SalePrice *int64 `json:"salePrice"`
+	Stock     int    `json:"stock"`
+	IsActive  bool   `json:"isActive"`
+	ImageURL  string `json:"imageUrl"`
 }
 
 // Product is the full editable product. Saving replaces media and reconciles variants by ID.
@@ -188,6 +188,44 @@ type BundleOption struct {
 	Name     string   `json:"name"`
 	LineName string   `json:"lineName"`
 	Labels   []string `json:"labels"`
+}
+
+// SaleItem is a product on the bulk sale screen, grouped there by brand and line.
+type SaleItem struct {
+	ID        int64         `json:"id"`
+	Name      string        `json:"name"`
+	BrandID   int64         `json:"brandId"`
+	BrandName string        `json:"brandName"`
+	LineID    int64         `json:"lineId"`
+	LineName  string        `json:"lineName"`
+	ImageURL  string        `json:"imageUrl"`
+	Variants  []SaleVariant `json:"variants"`
+}
+
+// SaleVariant shows the regular and the sale price of one variant.
+type SaleVariant struct {
+	Label     string `json:"label"`
+	Price     int64  `json:"price"`
+	SalePrice *int64 `json:"salePrice"`
+}
+
+// SaleRequest sets (Percent > 0) or clears a sale price on every variant of the products.
+type SaleRequest struct {
+	ProductIDs []int64 `json:"productIds"`
+	Percent    int     `json:"percent"`
+}
+
+// SaleResult reports how many variants changed.
+type SaleResult struct {
+	Updated int `json:"updated"`
+}
+
+// SalePrice takes percent off price and rounds to 10 tenge. ok is false when the
+// result is not a real discount, e.g. a 1% sale of a very cheap item.
+func SalePrice(price int64, percent int) (sale int64, ok bool) {
+	// price*(100-percent) is the sale price in hundredths; +500 rounds half up to tens.
+	sale = (price*int64(100-percent) + 500) / 1000 * 10
+	return sale, sale > 0 && sale < price
 }
 
 // Order statuses in their usual sequence.
@@ -470,8 +508,8 @@ func (p *Product) validate() (autoSlug bool, err error) {
 		if vr.Price < 0 {
 			v.Add(prefix+"price", apperr.Invalid)
 		}
-		if vr.CompareAtPrice != nil && *vr.CompareAtPrice <= vr.Price {
-			v.Add(prefix+"compareAtPrice", apperr.Invalid)
+		if vr.SalePrice != nil && (*vr.SalePrice <= 0 || *vr.SalePrice >= vr.Price) {
+			v.Add(prefix+"salePrice", apperr.Invalid)
 		}
 		if vr.Stock < 0 {
 			v.Add(prefix+"stock", apperr.Invalid)
@@ -564,6 +602,17 @@ func (o *BundleOffer) validate() error {
 			}
 			seen[s.Group] = true
 		}
+	}
+	return v.Err()
+}
+
+func (s *SaleRequest) validate(clearing bool) error {
+	v := newValidator()
+	if len(s.ProductIDs) == 0 {
+		v.Add("productIds", apperr.Required)
+	}
+	if !clearing && (s.Percent < 1 || s.Percent > 99) {
+		v.Add("percent", apperr.Invalid)
 	}
 	return v.Err()
 }

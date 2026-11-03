@@ -64,7 +64,7 @@ const product: Product = {
       label: '',
       sku: '',
       price: 0,
-      compareAtPrice: null,
+      salePrice: null,
       stock: 0,
       isActive: true,
       imageUrl: '',

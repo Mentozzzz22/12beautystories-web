@@ -52,6 +52,10 @@ type AdminStore interface {
 	DeleteBundleOffer(ctx context.Context, id int64) error
 	BundleOptions(ctx context.Context) ([]admin.BundleOption, error)
 
+	SaleItems(ctx context.Context) ([]admin.SaleItem, error)
+	ApplySale(ctx context.Context, s admin.SaleRequest) (admin.SaleResult, error)
+	ClearSale(ctx context.Context, s admin.SaleRequest) (admin.SaleResult, error)
+
 	Orders(ctx context.Context, f admin.OrderFilter) (admin.OrderPage, error)
 	Order(ctx context.Context, id int64) (admin.Order, error)
 	SetOrderStatus(ctx context.Context, id int64, status string) (admin.Order, error)
@@ -130,6 +134,10 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	protected.HandleFunc("PUT /api/admin/bundles/{id}", update(a, s.SaveBundleOffer, func(o *admin.BundleOffer, id int64) { o.ID = id }))
 	protected.HandleFunc("DELETE /api/admin/bundles/{id}", remove(a, s.DeleteBundleOffer))
 	protected.HandleFunc("GET /api/admin/bundle-options", list(a, s.BundleOptions))
+
+	protected.HandleFunc("GET /api/admin/sale", list(a, s.SaleItems))
+	protected.HandleFunc("POST /api/admin/sale/apply", saleAction(a, s.ApplySale))
+	protected.HandleFunc("POST /api/admin/sale/clear", saleAction(a, s.ClearSale))
 
 	protected.HandleFunc("GET /api/admin/orders", a.adminOrders)
 	protected.HandleFunc("GET /api/admin/orders/{id}", get(a, s.Order))
@@ -222,6 +230,21 @@ func remove(a *API, del func(context.Context, int64) error) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func saleAction(a *API, fn func(context.Context, admin.SaleRequest) (admin.SaleResult, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in admin.SaleRequest
+		if !a.decode(w, r, &in) {
+			return
+		}
+		res, err := fn(r.Context(), in)
+		if err != nil {
+			a.fail(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
 	}
 }
 

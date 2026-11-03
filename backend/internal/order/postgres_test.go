@@ -55,8 +55,21 @@ func TestVariants(t *testing.T) {
 	if len(got) != 1 || !ok {
 		t.Fatalf("variants = %+v, want only %d", got, id)
 	}
-	if v.Price != 18000 || v.Stock != 8 || v.ProductName != "Energizing Shampoo" {
+	if v.Price != 18000 || v.Stock != 8 || v.ProductName != "Energizing Shampoo" || v.OnSale {
 		t.Errorf("variant = %+v", v)
+	}
+}
+
+func TestVariantsChargeSalePrice(t *testing.T) {
+	pool, store := setup(t)
+	id := variantID(t, pool, "davines-energizing-shampoo", "1000 ml")
+
+	got, err := store.Variants(context.Background(), []int64{id})
+	if err != nil {
+		t.Fatalf("Variants() error = %v", err)
+	}
+	if v := got[id]; v.Price != 48000 || !v.OnSale {
+		t.Errorf("variant = %+v, want sale price 48000", v)
 	}
 }
 

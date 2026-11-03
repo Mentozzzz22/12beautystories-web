@@ -24,8 +24,8 @@ func NewPostgres(db *pgxpool.Pool) *Postgres {
 // Variants returns purchasable variants (active variant, product and brand) by ID.
 func (p *Postgres) Variants(ctx context.Context, ids []int64) (map[int64]Variant, error) {
 	rows, err := p.db.Query(ctx, `
-		SELECT v.id, p.brand_id, p.name, v.label, v.price, v.stock,
-		       p.id, COALESCE(l.id, 0), COALESCE(l.name, ''), v.compare_at_price IS NOT NULL
+		SELECT v.id, p.brand_id, p.name, v.label, COALESCE(v.sale_price, v.price), v.stock,
+		       p.id, COALESCE(l.id, 0), COALESCE(l.name, ''), v.sale_price IS NOT NULL
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id AND p.is_active
 		JOIN brands b ON b.id = p.brand_id AND b.is_active

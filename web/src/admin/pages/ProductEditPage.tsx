@@ -13,7 +13,7 @@ const emptyVariant = (): Variant => ({
   label: '',
   sku: '',
   price: 0,
-  compareAtPrice: null,
+  salePrice: null,
   stock: 0,
   isActive: true,
   imageUrl: '',
@@ -328,12 +328,12 @@ export function ProductForm({ initial }: { initial: Product }) {
                     error={err('price')}
                   />
                   <NumberField
-                    label="Старая цена"
+                    label="Цена со скидкой"
                     suffix="₸"
-                    value={v.compareAtPrice}
-                    onChange={(compareAtPrice) => setVariant(i, { compareAtPrice })}
-                    hint="Если есть скидка"
-                    error={err('compareAtPrice') && 'Должна быть больше цены'}
+                    value={v.salePrice}
+                    onChange={(salePrice) => setVariant(i, { salePrice })}
+                    hint="Пусто, если скидки нет"
+                    error={err('salePrice') && 'Должна быть меньше цены'}
                   />
                   <NumberField
                     label="Остаток"
