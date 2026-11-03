@@ -127,11 +127,11 @@ function VariantPhotoPicker({
             aria-label={`${label}: фото ${i + 1}`}
             aria-pressed={m.url === value}
             onClick={() => onChange(m.url === value ? '' : m.url)}
-            className={`h-14 w-14 overflow-hidden rounded-lg border-2 ${
+            className={`h-14 w-14 overflow-hidden rounded-lg border-2 bg-white ${
               m.url === value ? 'border-ink' : 'border-line hover:border-muted'
             }`}
           >
-            <img src={m.url} alt="" className="h-full w-full object-cover" />
+            <img src={m.url} alt="" className="h-full w-full object-contain" />
           </button>
         ))}
       </div>

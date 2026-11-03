@@ -127,9 +127,9 @@ export function GalleryField({
         {value.map((m, i) => (
           <div
             key={m.url}
-            className="group relative aspect-square overflow-hidden rounded-xl bg-sand"
+            className="group relative aspect-square overflow-hidden rounded-xl bg-white"
           >
-            <img src={m.url} alt="" className="h-full w-full object-cover" />
+            <img src={m.url} alt="" className="h-full w-full object-contain" />
             {i === 0 && (
               <span className="absolute top-1.5 left-1.5 rounded-full bg-ink px-2 py-0.5 text-[10px] text-cream">
                 Обложка

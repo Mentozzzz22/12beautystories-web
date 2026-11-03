@@ -61,9 +61,11 @@ function CartRow({ item }: { item: CartItem }) {
     <li className="flex gap-4 py-5">
       <Link
         to={routes.product(item.productSlug)}
-        className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-sand"
+        className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-white"
       >
-        {item.imageUrl && <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />}
+        {item.imageUrl && (
+          <img src={item.imageUrl} alt="" className="h-full w-full object-contain" />
+        )}
       </Link>
       <div className="flex flex-1 flex-col">
         <p className="text-[11px] font-medium tracking-[0.12em] text-muted uppercase">

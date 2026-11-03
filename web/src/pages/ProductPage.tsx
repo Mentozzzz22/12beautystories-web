@@ -212,11 +212,11 @@ function Gallery({ media, alt, activeUrl, onSelect }: GalleryProps) {
 
   return (
     <div>
-      <div className="aspect-square overflow-hidden rounded-3xl bg-sand">
+      <div className="aspect-square overflow-hidden rounded-3xl bg-white">
         {current?.kind === 'video' ? (
-          <video src={current.url} controls playsInline className="h-full w-full object-cover" />
+          <video src={current.url} controls playsInline className="h-full w-full object-contain" />
         ) : current ? (
-          <img src={current.url} alt={alt} className="h-full w-full object-cover" />
+          <img src={current.url} alt={alt} className="h-full w-full object-contain" />
         ) : null}
       </div>
       {media.length > 1 && (
@@ -228,7 +228,7 @@ function Gallery({ media, alt, activeUrl, onSelect }: GalleryProps) {
               onClick={() => onSelect(m.url)}
               aria-label={`Фото ${i + 1}`}
               aria-current={m === current}
-              className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 ${
+              className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white ${
                 m === current ? 'border-ink' : 'border-transparent'
               }`}
             >
@@ -237,7 +237,7 @@ function Gallery({ media, alt, activeUrl, onSelect }: GalleryProps) {
                   Видео
                 </span>
               ) : (
-                <img src={m.url} alt="" className="h-full w-full object-cover" />
+                <img src={m.url} alt="" className="h-full w-full object-contain" />
               )}
             </button>
           ))}

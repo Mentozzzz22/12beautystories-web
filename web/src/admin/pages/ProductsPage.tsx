@@ -84,9 +84,9 @@ export function ProductsPage() {
                 to={`/admin/products/${p.id}`}
                 className="flex items-center gap-4 px-4 py-3 hover:bg-sand"
               >
-                <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-sand">
+                <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white">
                   {p.imageUrl && (
-                    <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={p.imageUrl} alt="" className="h-full w-full object-contain" />
                   )}
                 </span>
                 <span className="min-w-0 flex-1">

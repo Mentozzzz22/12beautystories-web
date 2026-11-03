@@ -7,13 +7,13 @@ export function ProductCard({ product }: { product: ProductSummary }) {
   const onSale = product.compareAtPrice !== undefined
   return (
     <Link to={routes.product(product.slug)} className="group flex flex-col">
-      <div className="relative aspect-square overflow-hidden rounded-2xl bg-sand">
+      <div className="relative aspect-square overflow-hidden rounded-2xl bg-white">
         {product.imageUrl && (
           <img
             src={product.imageUrl}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
         )}
         {onSale && (
