@@ -52,7 +52,6 @@ type AdminStore interface {
 	DeleteBundleOffer(ctx context.Context, id int64) error
 	BundleOptions(ctx context.Context) ([]admin.BundleOption, error)
 
-	SaleItems(ctx context.Context) ([]admin.SaleItem, error)
 	ApplySale(ctx context.Context, s admin.SaleRequest) (admin.SaleResult, error)
 	ClearSale(ctx context.Context, s admin.SaleRequest) (admin.SaleResult, error)
 
@@ -135,7 +134,6 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	protected.HandleFunc("DELETE /api/admin/bundles/{id}", remove(a, s.DeleteBundleOffer))
 	protected.HandleFunc("GET /api/admin/bundle-options", list(a, s.BundleOptions))
 
-	protected.HandleFunc("GET /api/admin/sale", list(a, s.SaleItems))
 	protected.HandleFunc("POST /api/admin/sale/apply", saleAction(a, s.ApplySale))
 	protected.HandleFunc("POST /api/admin/sale/clear", saleAction(a, s.ClearSale))
 
@@ -263,7 +261,10 @@ func (a *API) adminProducts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
 	brandID, _ := strconv.ParseInt(q.Get("brandId"), 10, 64)
-	res, err := a.Admin.Products(r.Context(), admin.ProductFilter{Query: q.Get("q"), BrandID: brandID, Page: page})
+	lineID, _ := strconv.ParseInt(q.Get("lineId"), 10, 64)
+	res, err := a.Admin.Products(r.Context(), admin.ProductFilter{
+		Query: q.Get("q"), BrandID: brandID, LineID: lineID, OnSale: q.Get("sale") == "1", Page: page,
+	})
 	if err != nil {
 		a.fail(w, r, err)
 		return

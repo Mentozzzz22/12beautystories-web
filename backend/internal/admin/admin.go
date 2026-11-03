@@ -55,6 +55,7 @@ type ProductListItem struct {
 	CategoryNames string `json:"categoryNames"`
 	ImageURL      string `json:"imageUrl"`
 	PriceFrom     *int64 `json:"priceFrom"`
+	SalePriceFrom *int64 `json:"salePriceFrom"` // lowest sale price, nil when nothing is on sale
 	TotalStock    int    `json:"totalStock"`
 	VariantCount  int    `json:"variantCount"`
 	IsActive      bool   `json:"isActive"`
@@ -64,6 +65,8 @@ type ProductListItem struct {
 type ProductFilter struct {
 	Query   string
 	BrandID int64
+	LineID  int64
+	OnSale  bool
 	Page    int
 }
 
@@ -190,25 +193,6 @@ type BundleOption struct {
 	Labels   []string `json:"labels"`
 }
 
-// SaleItem is a product on the bulk sale screen, grouped there by brand and line.
-type SaleItem struct {
-	ID        int64         `json:"id"`
-	Name      string        `json:"name"`
-	BrandID   int64         `json:"brandId"`
-	BrandName string        `json:"brandName"`
-	LineID    int64         `json:"lineId"`
-	LineName  string        `json:"lineName"`
-	ImageURL  string        `json:"imageUrl"`
-	Variants  []SaleVariant `json:"variants"`
-}
-
-// SaleVariant shows the regular and the sale price of one variant.
-type SaleVariant struct {
-	Label     string `json:"label"`
-	Price     int64  `json:"price"`
-	SalePrice *int64 `json:"salePrice"`
-}
-
 // SaleRequest sets (Percent > 0) or clears a sale price on every variant of the products.
 type SaleRequest struct {
 	ProductIDs []int64 `json:"productIds"`
@@ -220,11 +204,11 @@ type SaleResult struct {
 	Updated int `json:"updated"`
 }
 
-// SalePrice takes percent off price and rounds to 10 tenge. ok is false when the
-// result is not a real discount, e.g. a 1% sale of a very cheap item.
+// SalePrice takes percent off price, rounded half up to whole tenge. ok is false when the
+// result is not a real discount, e.g. a 1% sale of a 1 tenge item.
 func SalePrice(price int64, percent int) (sale int64, ok bool) {
-	// price*(100-percent) is the sale price in hundredths; +500 rounds half up to tens.
-	sale = (price*int64(100-percent) + 500) / 1000 * 10
+	// price*(100-percent) is the sale price in hundredths of tenge; +50 rounds half up.
+	sale = (price*int64(100-percent) + 50) / 100
 	return sale, sale > 0 && sale < price
 }
 

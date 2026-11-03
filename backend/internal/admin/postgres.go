@@ -275,19 +275,23 @@ func (p *Postgres) Products(ctx context.Context, f ProductFilter) (ProductPage, 
 		                 WHERE pc.product_id = p.id), ''),
 		       COALESCE((SELECT m.url FROM product_media m WHERE m.product_id = p.id AND m.kind = 'image'
 		                 ORDER BY m.sort, m.id LIMIT 1), ''),
-		       v.price_from, COALESCE(v.total_stock, 0)::int, v.variant_count::int, p.is_active,
+		       v.price_from, v.sale_price_from, COALESCE(v.total_stock, 0)::int, v.variant_count::int, p.is_active,
 		       count(*) OVER ()
 		FROM products p
 		JOIN brands b ON b.id = p.brand_id
 		LEFT JOIN product_lines l ON l.id = p.line_id
 		CROSS JOIN LATERAL (
-		    SELECT min(price) AS price_from, sum(stock) AS total_stock, count(*) AS variant_count
+		    SELECT min(price) AS price_from,
+		           min(sale_price) AS sale_price_from,
+		           sum(stock) AS total_stock, count(*) AS variant_count
 		    FROM product_variants WHERE product_id = p.id
 		) v
 		WHERE ($1 = '' OR p.name ILIKE $1 OR b.name ILIKE $1 OR l.name ILIKE $1 OR p.slug ILIKE $1)
 		  AND ($2 = 0 OR p.brand_id = $2)
+		  AND ($3 = 0 OR p.line_id = $3)
+		  AND (NOT $4 OR v.sale_price_from IS NOT NULL)
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3 OFFSET $4`, pattern, f.BrandID, PageSize, (page-1)*PageSize)
+		LIMIT $5 OFFSET $6`, pattern, f.BrandID, f.LineID, f.OnSale, PageSize, (page-1)*PageSize)
 	if err != nil {
 		return ProductPage{}, fmt.Errorf("query products: %w", err)
 	}
@@ -297,7 +301,7 @@ func (p *Postgres) Products(ctx context.Context, f ProductFilter) (ProductPage, 
 	for rows.Next() {
 		var it ProductListItem
 		if err := rows.Scan(&it.ID, &it.Slug, &it.Name, &it.BrandName, &it.LineName, &it.CategoryNames,
-			&it.ImageURL, &it.PriceFrom, &it.TotalStock, &it.VariantCount, &it.IsActive, &res.Total); err != nil {
+			&it.ImageURL, &it.PriceFrom, &it.SalePriceFrom, &it.TotalStock, &it.VariantCount, &it.IsActive, &res.Total); err != nil {
 			return ProductPage{}, fmt.Errorf("scan product: %w", err)
 		}
 		res.Items = append(res.Items, it)
@@ -809,34 +813,6 @@ func (p *Postgres) BundleOptions(ctx context.Context) ([]BundleOption, error) {
 }
 
 // ---- Sales ----
-
-// SaleItems lists all products with their brand, line and current prices.
-func (p *Postgres) SaleItems(ctx context.Context) ([]SaleItem, error) {
-	rows, err := p.db.Query(ctx, `
-		SELECT p.id, p.name, b.id, b.name, COALESCE(l.id, 0), COALESCE(l.name, ''),
-		       COALESCE((SELECT m.url FROM product_media m
-		                 WHERE m.product_id = p.id AND m.kind = 'image'
-		                 ORDER BY m.sort, m.id LIMIT 1), ''),
-		       COALESCE((SELECT jsonb_agg(jsonb_build_object(
-		                     'label', v.label, 'price', v.price, 'salePrice', v.sale_price)
-		                     ORDER BY v.sort, v.id)
-		                 FROM product_variants v WHERE v.product_id = p.id), '[]')
-		FROM products p
-		JOIN brands b ON b.id = p.brand_id
-		LEFT JOIN product_lines l ON l.id = p.line_id
-		ORDER BY b.sort, b.name, l.sort NULLS LAST, l.name, p.sort, p.name`)
-	if err != nil {
-		return nil, fmt.Errorf("query sale items: %w", err)
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[SaleItem])
-	if err != nil {
-		return nil, fmt.Errorf("collect sale items: %w", err)
-	}
-	if items == nil {
-		items = []SaleItem{}
-	}
-	return items, nil
-}
 
 // ApplySale sets the sale price of every variant of the products to Percent off its regular price.
 // Variants where the rounded price would not be lower keep their current sale price.

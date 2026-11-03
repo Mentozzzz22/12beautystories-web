@@ -17,10 +17,10 @@ import type {
   OrderStatus,
   Page,
   Product,
+  ProductFilter,
   ProductListItem,
   Promo,
   Rule,
-  SaleItem,
   SaleResult,
 } from './types'
 
@@ -49,8 +49,10 @@ export const adminApi = {
     request<AdminUser>(`${BASE}/login`, json('POST', { email, password })),
   logout: () => request<void>(`${BASE}/logout`, { method: 'POST' }),
 
-  products: (q: string, brandId: number, page: number) =>
-    request<Page<ProductListItem>>(`${BASE}/products${qs({ q, brandId, page })}`),
+  products: (f: ProductFilter) =>
+    request<Page<ProductListItem>>(
+      `${BASE}/products${qs({ q: f.q, brandId: f.brandId, lineId: f.lineId, sale: f.onSale ? 1 : 0, page: f.page })}`,
+    ),
   product: (id: number) => request<Product>(`${BASE}/products/${id}`),
   saveProduct: (p: Product) =>
     p.id
@@ -140,13 +142,9 @@ const saleAction =
 
 export function useSale() {
   const qc = useQueryClient()
-  const items = useQuery({
-    queryKey: ['admin', 'sale'],
-    queryFn: () => request<SaleItem[]>(`${BASE}/sale`),
-  })
   // Prices show up across the storefront and the product editor.
   const invalidate = () => qc.invalidateQueries()
   const apply = useMutation({ mutationFn: saleAction('apply'), onSuccess: invalidate })
   const clear = useMutation({ mutationFn: saleAction('clear'), onSuccess: invalidate })
-  return { items, apply, clear }
+  return { apply, clear }
 }

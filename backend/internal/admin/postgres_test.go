@@ -600,27 +600,21 @@ func productIDs(t *testing.T, pool *pgxpool.Pool, slugs ...string) []int64 {
 	return ids
 }
 
-func salePrices(t *testing.T, repo *admin.Postgres, name string) []any {
+func salePrices(t *testing.T, pool *pgxpool.Pool, name string) []any {
 	t.Helper()
-	items, err := repo.SaleItems(context.Background())
-	if err != nil {
-		t.Fatalf("SaleItems() error = %v", err)
+	var prices []*int64
+	if err := pool.QueryRow(context.Background(), `
+		SELECT array_agg(v.sale_price ORDER BY v.sort, v.id)
+		FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.name = $1`, name).Scan(&prices); err != nil {
+		t.Fatal(err)
 	}
-	for _, it := range items {
-		if it.Name == name {
-			out := make([]any, 0, len(it.Variants))
-			for _, v := range it.Variants {
-				if v.SalePrice == nil {
-					out = append(out, nil)
-				} else {
-					out = append(out, *v.SalePrice)
-				}
-			}
-			return out
+	out := make([]any, len(prices))
+	for i, p := range prices {
+		if p != nil {
+			out[i] = *p
 		}
 	}
-	t.Fatalf("no sale item %q", name)
-	return nil
+	return out
 }
 
 func TestApplyAndClearSale(t *testing.T) {
@@ -628,7 +622,7 @@ func TestApplyAndClearSale(t *testing.T) {
 	ctx := context.Background()
 	ids := productIDs(t, pool, "davines-energizing-shampoo", "davines-minu-shampoo")
 
-	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, int64(48000)}) {
+	if got := salePrices(t, pool, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, int64(48000)}) {
 		t.Fatalf("seeded sale prices = %v", got)
 	}
 
@@ -640,10 +634,10 @@ func TestApplyAndClearSale(t *testing.T) {
 		t.Errorf("updated = %d, want 4", res.Updated)
 	}
 	// 9 000, 18 000 and 54 000 minus 30%; the old 48 000 sale price is replaced.
-	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{int64(6300), int64(12600), int64(37800)}) {
+	if got := salePrices(t, pool, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{int64(6300), int64(12600), int64(37800)}) {
 		t.Errorf("energizing sale prices = %v", got)
 	}
-	if got := salePrices(t, repo, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
+	if got := salePrices(t, pool, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
 		t.Errorf("minu sale prices = %v", got)
 	}
 
@@ -654,10 +648,10 @@ func TestApplyAndClearSale(t *testing.T) {
 	if res.Updated != 3 {
 		t.Errorf("cleared = %d, want 3", res.Updated)
 	}
-	if got := salePrices(t, repo, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, nil}) {
+	if got := salePrices(t, pool, "Energizing Shampoo"); !reflect.DeepEqual(got, []any{nil, nil, nil}) {
 		t.Errorf("energizing after clear = %v", got)
 	}
-	if got := salePrices(t, repo, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
+	if got := salePrices(t, pool, "MINU Shampoo"); !reflect.DeepEqual(got, []any{int64(13650)}) {
 		t.Errorf("minu after clearing another product = %v", got)
 	}
 }
@@ -673,5 +667,42 @@ func TestSaleValidation(t *testing.T) {
 	_, err = repo.ClearSale(ctx, admin.SaleRequest{})
 	if fieldErr(t, err, "productIds") == "" {
 		t.Errorf("ClearSale error = %v, want productIds", err)
+	}
+}
+
+func TestProductsFilterByLineAndSale(t *testing.T) {
+	pool, repo := setup(t)
+	ctx := context.Background()
+	var energizing int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM product_lines WHERE slug = 'energizing'`).Scan(&energizing); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := repo.Products(ctx, admin.ProductFilter{LineID: energizing})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.Items[0].Name != "Energizing Shampoo" {
+		t.Fatalf("line page = %+v", page)
+	}
+	// Seeded 1000 ml is 54 000 on sale for 48 000; the cheapest variant is 9 000 without a sale.
+	if it := page.Items[0]; *it.PriceFrom != 9000 || it.SalePriceFrom == nil || *it.SalePriceFrom != 48000 {
+		t.Errorf("prices = %v, %v", *it.PriceFrom, it.SalePriceFrom)
+	}
+
+	if _, err := repo.ApplySale(ctx, admin.SaleRequest{ProductIDs: productIDs(t, pool, "davines-minu-shampoo"), Percent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = repo.Products(ctx, admin.ProductFilter{OnSale: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, it := range page.Items {
+		names = append(names, it.Name)
+	}
+	slices.Sort(names)
+	if !reflect.DeepEqual(names, []string{"Energizing Shampoo", "MINU Shampoo"}) {
+		t.Errorf("on sale = %v", names)
 	}
 }

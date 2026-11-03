@@ -44,9 +44,18 @@ export interface ProductListItem {
   categoryNames: string
   imageUrl: string
   priceFrom: number | null
+  salePriceFrom: number | null
   totalStock: number
   variantCount: number
   isActive: boolean
+}
+
+export interface ProductFilter {
+  q: string
+  brandId: number
+  lineId: number
+  onSale: boolean
+  page: number
 }
 
 export interface Page<T> {
@@ -70,23 +79,6 @@ export interface Variant {
   stock: number
   isActive: boolean
   imageUrl: string
-}
-
-export interface SaleVariant {
-  label: string
-  price: number
-  salePrice: number | null
-}
-
-export interface SaleItem {
-  id: number
-  name: string
-  brandId: number
-  brandName: string
-  lineId: number
-  lineName: string
-  imageUrl: string
-  variants: SaleVariant[]
 }
 
 export interface SaleResult {

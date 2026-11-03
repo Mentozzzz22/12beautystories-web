@@ -12,7 +12,6 @@ const NAV = [
   { to: '/admin/categories', label: 'Категории' },
   { to: '/admin/banners', label: 'Баннеры' },
   { to: '/admin/promos', label: 'Промокоды' },
-  { to: '/admin/sale', label: 'Скидки на товары' },
   { to: '/admin/rules', label: 'Скидки' },
   { to: '/admin/bundles', label: 'Наборы' },
 ] as const
