@@ -10,6 +10,7 @@ import type { ProductListItem } from '../types'
 
 const productsWord = (n: number) => `${n} ${plural(n, ['товар', 'товара', 'товаров'])}`
 const pricesWord = (n: number) => `${n} ${plural(n, ['цена', 'цены', 'цен'])}`
+const hasSale = (p: ProductListItem) => p.salePriceFrom !== null
 
 export function ProductsPage() {
   const [params, setParams] = useSearchParams()
@@ -197,7 +198,7 @@ export function ProductsPage() {
             >
               Снять выделение
             </button>
-            <ActionMenu onPick={setAction} />
+            <ActionMenu canClear={[...selected.values()].some(hasSale)} onPick={setAction} />
           </div>
         </div>
       )}
@@ -276,7 +277,13 @@ function Check({
   )
 }
 
-function ActionMenu({ onPick }: { onPick: (a: 'apply' | 'clear') => void }) {
+function ActionMenu({
+  canClear,
+  onPick,
+}: {
+  canClear: boolean
+  onPick: (a: 'apply' | 'clear') => void
+}) {
   const [open, setOpen] = useState(false)
   const pick = (a: 'apply' | 'clear') => {
     setOpen(false)
@@ -297,7 +304,12 @@ function ActionMenu({ onPick }: { onPick: (a: 'apply' | 'clear') => void }) {
           <div className="fixed inset-0" onClick={() => setOpen(false)} />
           <div className="absolute right-0 bottom-full mb-2 w-56 rounded-xl border border-line bg-white p-1 shadow-lg">
             <MenuItem onClick={() => pick('apply')}>Поставить скидку %</MenuItem>
-            <MenuItem onClick={() => pick('clear')}>Убрать скидку</MenuItem>
+            <MenuItem disabled={!canClear} onClick={() => pick('clear')}>
+              Убрать скидку
+              {!canClear && (
+                <span className="block text-xs text-muted">У выбранных товаров нет скидки</span>
+              )}
+            </MenuItem>
           </div>
         </>
       )}
@@ -305,11 +317,20 @@ function ActionMenu({ onPick }: { onPick: (a: 'apply' | 'clear') => void }) {
   )
 }
 
-function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function MenuItem({
+  disabled = false,
+  onClick,
+  children,
+}: {
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
   return (
     <button
       type="button"
-      className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand"
+      disabled={disabled}
+      className="block w-full rounded-lg px-3 py-2 text-left text-sm enabled:hover:bg-sand disabled:cursor-not-allowed disabled:text-muted"
       onClick={onClick}
     >
       {children}
@@ -332,7 +353,10 @@ function SaleDialog({
   const [percent, setPercent] = useState<number | null>(null)
   const valid = percent !== null && percent >= 1 && percent <= 99
   const mutation = action === 'apply' ? apply : clear
-  const productIds = products.map((p) => p.id)
+  // Clearing only touches products that have a sale; a new sale replaces an old one, never adds up.
+  const shown = action === 'clear' ? products.filter(hasSale) : products
+  const productIds = shown.map((p) => p.id)
+  const replaced = action === 'apply' ? products.filter(hasSale).length : 0
 
   const submit = () => {
     if (action === 'clear') {
@@ -371,12 +395,19 @@ function SaleDialog({
           />
         ) : (
           <p className="text-sm">
-            Выбрано {productsWord(products.length)}. Цена со скидкой будет очищена, останется
-            обычная цена.
+            Скидка будет убрана: {productsWord(shown.length)}, останется обычная цена.
+            {shown.length < products.length &&
+              ` Без скидки и не изменятся: ${productsWord(products.length - shown.length)}.`}
+          </p>
+        )}
+        {replaced > 0 && (
+          <p className="rounded-xl bg-sand px-3 py-2 text-sm">
+            Скидка уже есть: {productsWord(replaced)}. Она заменится новой, считается от обычной
+            цены, скидки не складываются.
           </p>
         )}
         <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-xl border border-line bg-white text-sm">
-          {products.map((p) => {
+          {shown.map((p) => {
             const next = valid && p.priceFrom !== null ? salePrice(p.priceFrom, percent) : null
             return (
               <li key={p.id} className="flex justify-between gap-3 px-3 py-2">
@@ -385,8 +416,12 @@ function SaleDialog({
                   <span className="shrink-0 text-muted">
                     {p.variantCount > 1 && 'от '}
                     {formatTenge(p.priceFrom)}
-                    {next !== null && (
+                    {next !== null ? (
                       <span className="font-medium text-sale"> → {formatTenge(next)}</span>
+                    ) : (
+                      p.salePriceFrom !== null && (
+                        <span className="text-sale"> · сейчас {formatTenge(p.salePriceFrom)}</span>
+                      )
                     )}
                   </span>
                 )}
